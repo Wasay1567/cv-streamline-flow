@@ -1,0 +1,56 @@
+import { useAuth } from '@/contexts/AuthContext';
+import { Link, useLocation } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { LogOut, FileText, Users, LayoutDashboard, Shield } from 'lucide-react';
+
+const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  const { user, role, signOut } = useAuth();
+  const location = useLocation();
+
+  const navItems = [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student', 'advisor', 'dil_admin'] },
+    { to: '/cv-form', label: 'CV Form', icon: FileText, roles: ['student'] },
+    { to: '/students', label: 'Students', icon: Users, roles: ['advisor', 'dil_admin'] },
+    { to: '/admin', label: 'Admin', icon: Shield, roles: ['dil_admin'] },
+  ];
+
+  const filtered = navItems.filter(item => role && item.roles.includes(role));
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        <div className="container flex h-14 items-center justify-between">
+          <div className="flex items-center gap-6">
+            <Link to="/dashboard" className="flex items-center gap-2 font-bold text-primary text-lg">
+              <FileText className="h-5 w-5" />
+              CV Automation
+            </Link>
+            <nav className="hidden md:flex items-center gap-1">
+              {filtered.map(item => (
+                <Link key={item.to} to={item.to}>
+                  <Button
+                    variant={location.pathname === item.to ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Button>
+                </Link>
+              ))}
+            </nav>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
+            <Button variant="ghost" size="icon" onClick={signOut}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+      <main className="container py-6">{children}</main>
+    </div>
+  );
+};
+
+export default AppLayout;
