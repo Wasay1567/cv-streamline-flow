@@ -46,6 +46,7 @@ export interface CVData {
   industrialVisits: string[];
   certificates: string[];
   achievements: string[];
+  skills: string[];
   extraCurricular: string[];
   references: Reference[];
 }
@@ -94,6 +95,7 @@ export const emptyCVData: CVData = {
   industrialVisits: [],
   certificates: [],
   achievements: [],
+  skills: [],
   extraCurricular: [],
   references: [{ name: '', contact: '', occupation: '', relation: '' }],
 };

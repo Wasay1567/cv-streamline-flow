@@ -111,6 +111,16 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
             </Section>
           )}
 
+          {cv.skills?.length > 0 && (
+            <Section title="Skills">
+              <div className="flex flex-wrap gap-2">
+                {cv.skills.map((s, i) => (
+                  <span key={i} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">{s}</span>
+                ))}
+              </div>
+            </Section>
+          )}
+
           {cv.references?.length > 0 && (
             <Section title="References">
               {cv.references.map((r, idx) => (
