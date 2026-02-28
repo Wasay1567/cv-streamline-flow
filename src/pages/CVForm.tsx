@@ -16,7 +16,7 @@ import { DEPARTMENTS, BATCHES, emptyCVData } from '@/types/cv';
 import type { CVData, AcademicRecord, Internship, Reference, CVSubmission } from '@/types/cv';
 import { Plus, Trash2, ChevronLeft, ChevronRight, Save, Send } from 'lucide-react';
 
-const STEPS = ['Personal Info', 'Academics', 'FYP Details', 'Career Counseling', 'Internships', 'Industrial Visits', 'Certificates & Achievements', 'Extra-Curricular', 'References'];
+const STEPS = ['Personal Info', 'Academics', 'FYP Details', 'Career Counseling', 'Internships', 'Industrial Visits', 'Certificates & Achievements', 'Skills', 'Extra-Curricular', 'References'];
 
 const CVForm = () => {
   const { user } = useAuth();
@@ -65,13 +65,13 @@ const CVForm = () => {
   };
 
   // String list helpers
-  const addToList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'extraCurricular') => {
+  const addToList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular') => {
     setCvData(prev => ({ ...prev, [key]: [...prev[key], ''] }));
   };
-  const removeFromList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'extraCurricular', i: number) => {
+  const removeFromList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular', i: number) => {
     setCvData(prev => ({ ...prev, [key]: prev[key].filter((_, idx) => idx !== i) }));
   };
-  const updateList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'extraCurricular', i: number, value: string) => {
+  const updateList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular', i: number, value: string) => {
     setCvData(prev => ({ ...prev, [key]: prev[key].map((v, idx) => idx === i ? value : v) }));
   };
 
@@ -105,7 +105,7 @@ const CVForm = () => {
 
   const progress = ((step + 1) / STEPS.length) * 100;
 
-  const StringListSection = ({ title, listKey }: { title: string; listKey: 'industrialVisits' | 'certificates' | 'achievements' | 'extraCurricular' }) => (
+  const StringListSection = ({ title, listKey }: { title: string; listKey: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular' }) => (
     <div className="space-y-3">
       {cvData[listKey].map((item, i) => (
         <div key={i} className="flex gap-2">
@@ -244,9 +244,11 @@ const CVForm = () => {
               </div>
             )}
 
-            {step === 7 && <StringListSection title="Activity" listKey="extraCurricular" />}
+            {step === 7 && <StringListSection title="Skill" listKey="skills" />}
 
-            {step === 8 && (
+            {step === 8 && <StringListSection title="Activity" listKey="extraCurricular" />}
+
+            {step === 9 && (
               <div className="space-y-4">
                 {cvData.references.map((ref, i) => (
                   <div key={i} className="border rounded-lg p-4 space-y-3">
