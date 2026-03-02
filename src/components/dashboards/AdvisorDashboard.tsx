@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { backend } from '@/integrations/api/backend';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,12 +8,11 @@ import StatusBadge from '@/components/StatusBadge';
 import CVViewDialog from '@/components/CVViewDialog';
 import type { CVSubmission, CVStatus, Profile } from '@/types/cv';
 import { useToast } from '@/hooks/use-toast';
-import { Users, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
 const AdvisorDashboard = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<(CVSubmission & { profiles: Profile })[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -25,27 +23,29 @@ const AdvisorDashboard = () => {
   const [tab, setTab] = useState('all');
 
   const fetchData = async () => {
-    const { data: profs } = await supabase.from('profiles').select('*');
-    setProfiles((profs as Profile[]) || []);
-
-    const { data: subs } = await supabase
-      .from('cv_submissions')
-      .select('*, profiles!cv_submissions_student_id_fkey(*)');
-    setSubmissions((subs as any[]) || []);
-    setLoading(false);
+    try {
+      const [profs, subs] = await Promise.all([
+        backend.listProfiles(),
+        backend.listSubmissions(),
+      ]);
+      setProfiles(profs || []);
+      setSubmissions((subs as any[]) || []);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
 
   const handleApprove = async (id: string) => {
-    await supabase.from('cv_submissions').update({ status: 'pending_dil', advisor_comments: '' }).eq('id', id);
+    await backend.updateSubmissionStatus(id, 'pending_dil', '');
     toast({ title: 'CV approved and forwarded to DIL admin' });
     fetchData();
   };
 
   const handleReject = async () => {
     if (!rejectId) return;
-    await supabase.from('cv_submissions').update({ status: 'rejected', advisor_comments: rejectComment }).eq('id', rejectId);
+    await backend.updateSubmissionStatus(rejectId, 'rejected', rejectComment);
     toast({ title: 'CV rejected', description: 'Student has been notified.' });
     setRejectId(null);
     setRejectComment('');

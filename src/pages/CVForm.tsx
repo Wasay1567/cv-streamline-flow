@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { backend } from '@/integrations/api/backend';
 import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,62 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { DEPARTMENTS, BATCHES, emptyCVData } from '@/types/cv';
+import { DEPARTMENTS, BATCHES, cvSchema, emptyCVData } from '@/types/cv';
 import type { CVData, AcademicRecord, Internship, Reference, CVSubmission } from '@/types/cv';
 import { Plus, Trash2, ChevronLeft, ChevronRight, Save, Send } from 'lucide-react';
 
 const STEPS = ['Personal Info', 'Academics', 'FYP Details', 'Career Counseling', 'Internships', 'Industrial Visits', 'Certificates & Achievements', 'Skills', 'Extra-Curricular', 'References'];
+type FieldPath = Array<string | number>;
+type ListKey = 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular';
+const pathKey = (path: FieldPath) => path.map(String).join('.');
+const isSamePath = (a: FieldPath, b: FieldPath) => a.length === b.length && a.every((segment, index) => String(segment) === String(b[index]));
+
+// This lives OUTSIDE the main component
+const StringListSection = ({ 
+  title, 
+  listKey, 
+  cvData, 
+  updateList, 
+  removeFromList, 
+  addToList 
+}: { 
+  title: string; 
+  listKey: ListKey; 
+  cvData: CVData;
+  updateList: (key: ListKey, i: number, value: string) => void;
+  removeFromList: (key: ListKey, i: number) => void;
+  addToList: (key: ListKey) => void;
+}) => (
+  <div className="space-y-3">
+    {cvData[listKey].map((item, i) => (
+      <div key={i} className="flex gap-2">
+        <Input 
+          value={item} 
+          onChange={e => updateList(listKey, i, e.target.value)} 
+          placeholder={`Enter ${title.toLowerCase()}`} 
+          autoFocus={i === cvData[listKey].length - 1 && item === ""} 
+        />
+        <Button 
+          type="button" 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => removeFromList(listKey, i)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    ))}
+    <Button 
+      type="button" 
+      variant="outline" 
+      size="sm" 
+      onClick={() => addToList(listKey)} 
+      className="gap-1"
+    >
+      <Plus className="h-4 w-4" /> Add {title}
+    </Button>
+  </div>
+);
 
 const CVForm = () => {
   const { user } = useAuth();
@@ -26,16 +77,45 @@ const CVForm = () => {
   const [cvData, setCvData] = useState<CVData>(emptyCVData);
   const [existingId, setExistingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('cv_submissions').select('*').eq('student_id', user.id).maybeSingle().then(({ data }) => {
+    backend.getMySubmission().then((data) => {
       if (data) {
         setExistingId(data.id);
         setCvData((data as unknown as CVSubmission).cv_data as CVData);
       }
     });
   }, [user]);
+
+  const getFieldError = (path: FieldPath) => {
+    const result = cvSchema.safeParse(cvData);
+    if (result.success) return null;
+    const issue = result.error.issues.find((item) => isSamePath(item.path as FieldPath, path));
+    return issue?.message ?? null;
+  };
+
+  const validateField = (path: FieldPath) => {
+    const key = pathKey(path);
+    const message = getFieldError(path);
+    setTouched((prev) => ({ ...prev, [key]: true }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (message) next[key] = message;
+      else delete next[key];
+      return next;
+    });
+  };
+
+  const fieldError = (path: FieldPath) => {
+    const key = pathKey(path);
+    if (!touched[key]) return null;
+    return errors[key] || null;
+  };
+
+  const fieldClass = (path: FieldPath) => (fieldError(path) ? 'border-destructive' : '');
 
   const updatePersonal = (field: string, value: string) => {
     setCvData(prev => ({ ...prev, personalInfo: { ...prev.personalInfo, [field]: value } }));
@@ -52,6 +132,23 @@ const CVForm = () => {
     setCvData(prev => ({ ...prev, academics: prev.academics.map((a, idx) => idx === i ? { ...a, [field]: value } : a) }));
   };
 
+  const addListItem = (key: keyof CVData, initialValue: any) => {
+  setCvData(prev => ({ ...prev, [key]: [...(prev[key] as any[]), initialValue] }));
+};
+
+const removeListItem = (key: keyof CVData, i: number) => {
+  setCvData(prev => ({ ...prev, [key]: (prev[key] as any[]).filter((_, idx) => idx !== i) }));
+};
+
+const updateListItem = (key: keyof CVData, i: number, field: string, value: string) => {
+  setCvData(prev => ({
+    ...prev,
+    [key]: (prev[key] as any[]).map((item, idx) => 
+      idx === i ? { ...item, [field]: value } : item
+    )
+  }));
+};
+
   const addInternship = () => setCvData(prev => ({ ...prev, internships: [...prev.internships, { organization: '', position: '', field: '', from: '', to: '' }] }));
   const removeInternship = (i: number) => setCvData(prev => ({ ...prev, internships: prev.internships.filter((_, idx) => idx !== i) }));
   const updateInternship = (i: number, field: keyof Internship, value: string) => {
@@ -65,13 +162,13 @@ const CVForm = () => {
   };
 
   // String list helpers
-  const addToList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular') => {
+  const addToList = (key: ListKey) => {
     setCvData(prev => ({ ...prev, [key]: [...prev[key], ''] }));
   };
-  const removeFromList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular', i: number) => {
+  const removeFromList = (key: ListKey, i: number) => {
     setCvData(prev => ({ ...prev, [key]: prev[key].filter((_, idx) => idx !== i) }));
   };
-  const updateList = (key: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular', i: number, value: string) => {
+  const updateList = (key: ListKey, i: number, value: string) => {
     setCvData(prev => ({ ...prev, [key]: prev[key].map((v, idx) => idx === i ? value : v) }));
   };
 
@@ -79,13 +176,14 @@ const CVForm = () => {
     if (!user) return;
     setSaving(true);
     const payload = { student_id: user.id, cv_data: cvData as any, status: 'not_submitted' as const, updated_at: new Date().toISOString() };
-    if (existingId) {
-      await supabase.from('cv_submissions').update(payload).eq('id', existingId);
-    } else {
-      const { data } = await supabase.from('cv_submissions').insert(payload).select().single();
-      if (data) setExistingId(data.id);
+    try {
+      const data = await backend.saveMySubmission(payload);
+      if (data?.id) setExistingId(data.id);
+      toast({ title: 'Draft saved!' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save draft';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
     }
-    toast({ title: 'Draft saved!' });
     setSaving(false);
   };
 
@@ -93,29 +191,31 @@ const CVForm = () => {
     if (!user) return;
     setSaving(true);
     const payload = { student_id: user.id, cv_data: cvData as any, status: 'pending_advisor' as const, submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    if (existingId) {
-      await supabase.from('cv_submissions').update(payload).eq('id', existingId);
-    } else {
-      await supabase.from('cv_submissions').insert(payload);
+    console.log("Final CV Submission Payload", payload)
+    try {
+      await backend.saveMySubmission(payload);
+      toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
+      navigate('/dashboard');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to submit CV';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
     }
-    toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
-    navigate('/dashboard');
     setSaving(false);
   };
 
   const progress = ((step + 1) / STEPS.length) * 100;
 
-  const StringListSection = ({ title, listKey }: { title: string; listKey: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular' }) => (
-    <div className="space-y-3">
-      {cvData[listKey].map((item, i) => (
-        <div key={i} className="flex gap-2">
-          <Input value={item} onChange={e => updateList(listKey, i, e.target.value)} placeholder={`Enter ${title.toLowerCase()}`} />
-          <Button type="button" variant="ghost" size="icon" onClick={() => removeFromList(listKey, i)}><Trash2 className="h-4 w-4" /></Button>
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" onClick={() => addToList(listKey)} className="gap-1"><Plus className="h-4 w-4" /> Add {title}</Button>
-    </div>
-  );
+  // const StringListSection = ({ title, listKey }: { title: string; listKey: 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular' }) => (
+  //   <div className="space-y-3">
+  //     {cvData[listKey].map((item, i) => (
+  //       <div key={i} className="flex gap-2">
+  //         <Input value={item} onChange={e => updateList(listKey, i, e.target.value)} placeholder={`Enter ${title.toLowerCase()}`} />
+  //         <Button type="button" variant="ghost" size="icon" onClick={() => removeFromList(listKey, i)}><Trash2 className="h-4 w-4" /></Button>
+  //       </div>
+  //     ))}
+  //     <Button type="button" variant="outline" size="sm" onClick={() => addToList(listKey)} className="gap-1"><Plus className="h-4 w-4" /> Add {title}</Button>
+  //   </div>
+  // );
 
   return (
     <AppLayout>
@@ -141,61 +241,190 @@ const CVForm = () => {
             {step === 0 && (
               <>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2"><Label>Name</Label><Input value={cvData.personalInfo.name} onChange={e => updatePersonal('name', e.target.value)} /></div>
-                  <div className="space-y-2"><Label>Father's Name</Label><Input value={cvData.personalInfo.fatherName} onChange={e => updatePersonal('fatherName', e.target.value)} /></div>
+                  <div className="space-y-2">
+                    <Label>Name</Label>
+                    <Input value={cvData.personalInfo.name} className={fieldClass(['personalInfo', 'name'])} onChange={e => updatePersonal('name', e.target.value)} onBlur={() => validateField(['personalInfo', 'name'])} />
+                    {fieldError(['personalInfo', 'name']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'name'])}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Father's Name</Label>
+                    <Input value={cvData.personalInfo.fatherName} className={fieldClass(['personalInfo', 'fatherName'])} onChange={e => updatePersonal('fatherName', e.target.value)} onBlur={() => validateField(['personalInfo', 'fatherName'])} />
+                    {fieldError(['personalInfo', 'fatherName']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'fatherName'])}</p>}
+                  </div>
                   <div className="space-y-2">
                     <Label>Department</Label>
                     <Select value={cvData.personalInfo.department} onValueChange={v => updatePersonal('department', v)}>
-                      <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                      <SelectTrigger className={fieldClass(['personalInfo', 'department'])} onBlur={() => validateField(['personalInfo', 'department'])}><SelectValue placeholder="Select department" /></SelectTrigger>
                       <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                     </Select>
+                    {fieldError(['personalInfo', 'department']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'department'])}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>Batch</Label>
                     <Select value={cvData.personalInfo.batch} onValueChange={v => updatePersonal('batch', v)}>
-                      <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
+                      <SelectTrigger className={fieldClass(['personalInfo', 'batch'])} onBlur={() => validateField(['personalInfo', 'batch'])}><SelectValue placeholder="Select batch" /></SelectTrigger>
                       <SelectContent>{BATCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                     </Select>
+                    {fieldError(['personalInfo', 'batch']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'batch'])}</p>}
                   </div>
-                  <div className="space-y-2"><Label>Cell</Label><Input value={cvData.personalInfo.cell} onChange={e => updatePersonal('cell', e.target.value)} /></div>
-                  <div className="space-y-2"><Label>Roll No</Label><Input value={cvData.personalInfo.rollNo} onChange={e => updatePersonal('rollNo', e.target.value)} /></div>
-                  <div className="space-y-2"><Label>CNIC</Label><Input value={cvData.personalInfo.cnic} onChange={e => updatePersonal('cnic', e.target.value)} /></div>
-                  <div className="space-y-2"><Label>Email</Label><Input type="email" value={cvData.personalInfo.email} onChange={e => updatePersonal('email', e.target.value)} /></div>
+                  <div className="space-y-2">
+                    <Label>Cell</Label>
+                    <Input value={cvData.personalInfo.cell} className={fieldClass(['personalInfo', 'cell'])} placeholder='03XX-XXXXXXX' onChange={e => updatePersonal('cell', e.target.value)} onBlur={() => validateField(['personalInfo', 'cell'])} />
+                    {fieldError(['personalInfo', 'cell']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'cell'])}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Roll No</Label>
+                    <Input value={cvData.personalInfo.rollNo} className={fieldClass(['personalInfo', 'rollNo'])} placeholder='e.g., ME-20001' onChange={e => updatePersonal('rollNo', e.target.value)} onBlur={() => validateField(['personalInfo', 'rollNo'])} />
+                    {fieldError(['personalInfo', 'rollNo']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'rollNo'])}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CNIC</Label>
+                    <Input value={cvData.personalInfo.cnic} className={fieldClass(['personalInfo', 'cnic'])} placeholder='Write with hyphens(-)' onChange={e => updatePersonal('cnic', e.target.value)} onBlur={() => validateField(['personalInfo', 'cnic'])} />
+                    {fieldError(['personalInfo', 'cnic']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'cnic'])}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={cvData.personalInfo.email} className={fieldClass(['personalInfo', 'email'])} placeholder='Use university email' onChange={e => updatePersonal('email', e.target.value)} onBlur={() => validateField(['personalInfo', 'email'])} />
+                    {fieldError(['personalInfo', 'email']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'email'])}</p>}
+                  </div>
                   <div className="space-y-2">
                     <Label>Gender</Label>
                     <Select value={cvData.personalInfo.gender} onValueChange={v => updatePersonal('gender', v)}>
-                      <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
+                      <SelectTrigger className={fieldClass(['personalInfo', 'gender'])} onBlur={() => validateField(['personalInfo', 'gender'])}><SelectValue placeholder="Select gender" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Male">Male</SelectItem>
                         <SelectItem value="Female">Female</SelectItem>
                         <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldError(['personalInfo', 'gender']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'gender'])}</p>}
                   </div>
-                  <div className="space-y-2"><Label>Date of Birth</Label><Input type="date" value={cvData.personalInfo.dob} onChange={e => updatePersonal('dob', e.target.value)} /></div>
+                  <div className="space-y-2">
+                    <Label>Date of Birth</Label>
+                    <Input type="date" value={cvData.personalInfo.dob} className={fieldClass(['personalInfo', 'dob'])} onChange={e => updatePersonal('dob', e.target.value)} onBlur={() => validateField(['personalInfo', 'dob'])} />
+                    {fieldError(['personalInfo', 'dob']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'dob'])}</p>}
+                  </div>
                 </div>
-                <div className="space-y-2"><Label>Address</Label><Textarea value={cvData.personalInfo.address} onChange={e => updatePersonal('address', e.target.value)} /></div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Textarea value={cvData.personalInfo.address} className={fieldClass(['personalInfo', 'address'])} placeholder='Your Address' onChange={e => updatePersonal('address', e.target.value)} onBlur={() => validateField(['personalInfo', 'address'])} />
+                  {fieldError(['personalInfo', 'address']) && <p className="text-xs text-destructive">{fieldError(['personalInfo', 'address'])}</p>}
+                </div>
               </>
             )}
 
             {step === 1 && (
               <div className="space-y-4">
-                {cvData.academics.map((a, i) => (
-                  <div key={i} className="border rounded-lg p-4 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm">Degree {i + 1}</span>
-                      {cvData.academics.length > 1 && <Button type="button" variant="ghost" size="icon" onClick={() => removeAcademic(i)}><Trash2 className="h-4 w-4" /></Button>}
+                {[0, 1, 2].map((i) => {
+                  const isBE = i === 0;
+                  const degreeName = i === 1 ? "HSC" : i === 2 ? "SSC" : "University";
+                  const a = cvData.academics[i] || {};
+
+                  return (
+                    <div key={i} className="border rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">
+                          {isBE ? "University" : degreeName}
+                        </span>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Degree</Label>
+                          {isBE ? (
+                            <div className="flex flex-col">
+                              <select
+                                value={a.degree || ""}
+                                className={`${fieldClass(["academics", i, "degree"])} border p-2`}
+                                onChange={(e) => updateAcademic(i, "degree", e.target.value)}
+                                onBlur={() => validateField(["academics", i, "degree"])}
+                              >
+                                <option value="">Select...</option>
+                                <option value="BE">B.E.</option>
+                                <option value="BS">B.S.</option>
+                              </select>
+                              <span className="text-xs text-gray-500">(Discipline)</span>
+                            </div>
+                          ) : (
+                            <div className="p-1 font-medium">
+                              {degreeName}
+                              <input type="hidden" value={degreeName} />
+                            </div>
+                          )}
+                          {fieldError(["academics", i, "degree"]) && (
+                            <p className="text-xs text-destructive">
+                              {fieldError(["academics", i, "degree"])}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>University/Board</Label>
+                          <Input
+                            value={a.university || ""}
+                            className={fieldClass(["academics", i, "university"])}
+                            onChange={(e) => updateAcademic(i, "university", e.target.value)}
+                            onBlur={() => validateField(["academics", i, "university"])}
+                            placeholder={isBE ? "e.g., NEDUET" : "e.g., Karachi Board / Cambridge"}
+                          />
+                          {fieldError(["academics", i, "university"]) && (
+                            <p className="text-xs text-destructive">
+                              {fieldError(["academics", i, "university"])}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Year of Passing</Label>
+                          <Input
+                            value={a.year || ""}
+                            className={fieldClass(["academics", i, "year"])}
+                            onChange={(e) => updateAcademic(i, "year", e.target.value)}
+                            onBlur={() => validateField(["academics", i, "year"])}
+                            placeholder="YYYY"
+                          />
+                          {fieldError(["academics", i, "year"]) && (
+                            <p className="text-xs text-destructive">
+                              {fieldError(["academics", i, "year"])}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Cumulative GPA/Grade</Label>
+                          <Input
+                            value={a.gpa || ""}
+                            className={fieldClass(["academics", i, "gpa"])}
+                            onChange={(e) => updateAcademic(i, "gpa", e.target.value)}
+                            onBlur={() => validateField(["academics", i, "gpa"])}
+                            placeholder={isBE ? "e.g., 3.8" : "e.g., 85% or A1"}
+                          />
+                          {fieldError(["academics", i, "gpa"]) && (
+                            <p className="text-xs text-destructive">
+                              {fieldError(["academics", i, "gpa"])}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Major Subjects</Label>
+                          <Input
+                            value={a.majors || ""}
+                            className={fieldClass(["academics", i, "majors"])}
+                            onChange={(e) => updateAcademic(i, "majors", e.target.value)}
+                            onBlur={() => validateField(["academics", i, "majors"])}
+                            placeholder={isBE ? "Mechanical Engineering" : "Pre-Engineering / Science"}
+                          />
+                          {fieldError(["academics", i, "majors"]) && (
+                            <p className="text-xs text-destructive">
+                              {fieldError(["academics", i, "majors"])}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-2"><Label>Degree</Label><Input value={a.degree} onChange={e => updateAcademic(i, 'degree', e.target.value)} /></div>
-                      <div className="space-y-2"><Label>University</Label><Input value={a.university} onChange={e => updateAcademic(i, 'university', e.target.value)} /></div>
-                      <div className="space-y-2"><Label>Year</Label><Input value={a.year} onChange={e => updateAcademic(i, 'year', e.target.value)} /></div>
-                      <div className="space-y-2"><Label>GPA</Label><Input value={a.gpa} onChange={e => updateAcademic(i, 'gpa', e.target.value)} /></div>
-                      <div className="space-y-2 md:col-span-2"><Label>Majors</Label><Input value={a.majors} onChange={e => updateAcademic(i, 'majors', e.target.value)} /></div>
-                    </div>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" onClick={addAcademic} className="gap-1"><Plus className="h-4 w-4" /> Add Degree</Button>
+                  );
+                })}
               </div>
             )}
 
@@ -235,18 +464,101 @@ const CVForm = () => {
               </div>
             )}
 
-            {step === 5 && <StringListSection title="Industrial Visit" listKey="industrialVisits" />}
+            {step === 5 && (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-medium">Industrial Visits</h3>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => addListItem("industrialVisits", { organization: "", purpose: "", date: "" })}
+        className="gap-1"
+      >
+        <Plus className="h-4 w-4" /> Add Visit
+      </Button>
+    </div>
+
+    <div className="space-y-4">
+      {cvData.industrialVisits.map((visit: any, i: number) => (
+        <div key={i} className="border rounded-lg p-4 space-y-3 relative group">
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-sm text-muted-foreground">Visit #{i + 1}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => removeListItem("industrialVisits", i)}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Organization</Label>
+              <Input
+                value={visit.organization || ""}
+                placeholder="e.g., Toyota Indus Motors"
+                className={fieldClass(["industrialVisits", i, "organization"])}
+                onChange={(e) => updateListItem("industrialVisits", i, "organization", e.target.value)}
+                onBlur={() => validateField(["industrialVisits", i, "organization"])}
+              />
+              {fieldError(["industrialVisits", i, "organization"]) && (
+                <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "organization"])}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Purpose</Label>
+              <Input
+                value={visit.purpose || ""}
+                placeholder="e.g., Production Line Study"
+                className={fieldClass(["industrialVisits", i, "purpose"])}
+                onChange={(e) => updateListItem("industrialVisits", i, "purpose", e.target.value)}
+                onBlur={() => validateField(["industrialVisits", i, "purpose"])}
+              />
+              {fieldError(["industrialVisits", i, "purpose"]) && (
+                <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "purpose"])}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input
+                value={visit.date || ""}
+                placeholder="e.g., Oct 2023"
+                className={fieldClass(["industrialVisits", i, "date"])}
+                onChange={(e) => updateListItem("industrialVisits", i, "date", e.target.value)}
+                onBlur={() => validateField(["industrialVisits", i, "date"])}
+              />
+              {fieldError(["industrialVisits", i, "date"]) && (
+                <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "date"])}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+      
+      {cvData.industrialVisits.length === 0 && (
+        <p className="text-sm text-center text-muted-foreground py-4 border border-dashed rounded-lg">
+          No industrial visits added yet.
+        </p>
+      )}
+    </div>
+  </div>
+)}
 
             {step === 6 && (
               <div className="space-y-6">
-                <div><h4 className="font-medium mb-3">Certificates</h4><StringListSection title="Certificate" listKey="certificates" /></div>
-                <div><h4 className="font-medium mb-3">Achievements</h4><StringListSection title="Achievement" listKey="achievements" /></div>
+                <div><h4 className="font-medium mb-3">Certificates</h4><StringListSection title="Certificate" listKey="certificates" cvData={cvData} updateList={updateList} removeFromList={removeFromList} addToList={addToList} /></div>
+                <div><h4 className="font-medium mb-3">Achievements</h4><StringListSection title="Achievement" listKey="achievements"  cvData={cvData} updateList={updateList} removeFromList={removeFromList} addToList={addToList} /></div>
               </div>
             )}
 
-            {step === 7 && <StringListSection title="Skill" listKey="skills" />}
+            {step === 7 && <StringListSection title="Skill" listKey="skills"  cvData={cvData} updateList={updateList} removeFromList={removeFromList} addToList={addToList} />}
 
-            {step === 8 && <StringListSection title="Activity" listKey="extraCurricular" />}
+            {step === 8 && <StringListSection title="Activity" listKey="extraCurricular"  cvData={cvData} updateList={updateList} removeFromList={removeFromList} addToList={addToList} />}
 
             {step === 9 && (
               <div className="space-y-4">
@@ -295,3 +607,95 @@ const CVForm = () => {
 };
 
 export default CVForm;
+
+/**
+ * {
+    "student_id": "dev-student",
+    "cv_data": {
+        "personalInfo": {
+            "name": "Ali Khan",
+            "fatherName": "Ahmed Khan",
+            "department": "Department of Software Engineering",
+            "batch": "2023",
+            "cell": "0312-1234567",
+            "rollNo": "SE-23001",
+            "cnic": "12345-1234567-1",
+            "email": "ali123@cloud.neduet.edu.pk",
+            "gender": "Male",
+            "dob": "2003-06-02",
+            "address": "Gulshan e iqbal, Block 13D2"
+        },
+        "academics": [
+            {
+                "degree": "",
+                "university": "NEDUET",
+                "year": "2025",
+                "gpa": "3.5",
+                "majors": "Software Engineering"
+            },
+            {
+                "degree": "HSC",
+                "university": "Karachi Board",
+                "year": "2024",
+                "gpa": "75%",
+                "majors": "Pre-Engineering"
+            },
+            {
+                "degree": "SSC",
+                "university": "Karachi Board",
+                "year": "2022",
+                "gpa": "70%",
+                "majors": "Science"
+            }
+        ],
+        "fyp": {
+            "title": "wasd",
+            "company": "wasdww",
+            "objectives": "wasdddddddddddddd"
+        },
+        "careerCounseling": true,
+        "internships": [
+            {
+                "organization": "CodeAlpha",
+                "position": "Associate Software Engineer",
+                "field": "Software Development",
+                "from": "2025-06-02",
+                "to": "2025-08-02"
+            }
+        ],
+        "industrialVisits": [
+            {
+                "organization": "NIC Karachi",
+                "purpose": "Exposure to Dev Environment",
+                "date": "Nov, 2024"
+            }
+        ],
+        "certificates": [
+            "Maths"
+        ],
+        "achievements": [
+            "Probattle Hackathon"
+        ],
+        "skills": [
+            "Python",
+            "Leadership",
+            "Development",
+            "Analytical Thinking"
+        ],
+        "extraCurricular": [
+            "Football"
+        ],
+        "references": [
+            {
+                "name": "",
+                "contact": "",
+                "occupation": "",
+                "relation": ""
+            }
+        ]
+    },
+    "status": "pending_advisor",
+    "submitted_at": "2026-03-02T21:41:08.949Z",
+    "updated_at": "2026-03-02T21:41:08.949Z"
+}
+ */

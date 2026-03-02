@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { auth } from '@/integrations/api/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,17 +23,12 @@ const Signup = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const { error } = await supabase.auth.signUp({
-      email, password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { full_name: fullName },
-      },
-    });
-    if (error) {
-      toast({ title: 'Signup failed', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await auth.signUp(email, password, fullName);
       toast({ title: 'Account created!', description: 'Please check your email to verify your account.' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create account';
+      toast({ title: 'Signup failed', description: message, variant: 'destructive' });
     }
     setSubmitting(false);
   };

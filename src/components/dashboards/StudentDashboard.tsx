@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { backend } from '@/integrations/api/backend';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge';
@@ -15,13 +15,12 @@ const StudentDashboard = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from('cv_submissions')
-      .select('*')
-      .eq('student_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setSubmission(data as unknown as CVSubmission | null);
+    backend
+      .getMySubmission()
+      .then((data) => {
+        setSubmission(data as CVSubmission | null);
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, [user]);

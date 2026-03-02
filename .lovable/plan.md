@@ -3,13 +3,13 @@
 # Multi-Role CV Automation System
 
 ## Overview
-A university CV management platform where students submit structured CVs, class advisors review/approve them per department, and DIL admins have a global overview. Built with React + Tailwind + Supabase (external).
+A university CV management platform where students submit structured CVs, class advisors review/approve them per department, and DIL admins have a global overview. Built with React + Tailwind + a custom FastAPI backend.
 
 ---
 
 ## 1. Authentication & Role Management
 
-- **Login/Signup page** with email-based auth via Supabase
+- **Login/Signup page** with email-based auth via FastAPI backend
 - **Roles**: `student`, `advisor`, `dil_admin` — stored in a separate `user_roles` table (not on profiles) to prevent privilege escalation
 - **Admin assigns roles** — only a `dil_admin` can assign or change user roles via an admin panel
 - After login, users are routed to the correct dashboard based on their role
@@ -17,7 +17,7 @@ A university CV management platform where students submit structured CVs, class 
 
 ---
 
-## 2. Database Structure (Supabase)
+## 2. Database Structure (FastAPI + DB)
 
 - **`profiles`** table: `id`, `email`, `full_name`, `department`, `batch` — auto-created on signup via trigger
 - **`user_roles`** table: `user_id`, `role` (enum: `student`, `advisor`, `dil_admin`) — secured with RLS + `has_role()` security definer function
@@ -56,7 +56,7 @@ Each section has validation. Progress indicator shows completion. Students can s
 - **Filter tabs**: All / Not Submitted / Pending / Approved / Rejected
 - **Click a student** → view their full CV in a clean read-only layout
 - **Action buttons**: "Approve" (moves status to `pending_dil`) or "Reject" (opens comment dialog)
-- **"Send Email Reminder"** button — triggers a Supabase Edge Function that sends real emails (via Resend or similar) to all students who haven't submitted yet
+- **"Send Email Reminder"** button — triggers a backend endpoint that sends real emails (via Resend or similar) to all students who haven't submitted yet
 
 ---
 
@@ -69,11 +69,11 @@ Each section has validation. Progress indicator shows completion. Students can s
 
 ---
 
-## 6. Email Reminder Feature (Edge Function)
+## 6. Email Reminder Feature (Backend Endpoint)
 
-- A Supabase Edge Function that accepts a department/batch filter
+- A FastAPI endpoint that accepts a department/batch filter
 - Queries students without submissions and sends reminder emails
-- Requires an email service API key (e.g., Resend) stored as a Supabase secret
+- Requires an email service API key (e.g., Resend) stored as a backend environment secret
 - Triggered from the Advisor Dashboard UI
 
 ---
@@ -85,4 +85,3 @@ Each section has validation. Progress indicator shows completion. Students can s
 - **Progress indicators** on the CV form (step tracker)
 - **Status badges** with color coding (green = approved, yellow = pending, red = rejected)
 - **Toast notifications** for actions (submit, approve, reject)
-

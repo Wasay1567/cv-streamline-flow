@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { auth } from '@/integrations/api/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { FileText } from 'lucide-react';
+import type { AppRole } from '@/types/cv';
 
 const Login = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const devAuthEnabled = auth.isDevAuthEnabled();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -22,9 +24,19 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) toast({ title: 'Login failed', description: error.message, variant: 'destructive' });
+    try {
+      await auth.signIn(email, password);
+      window.location.assign('/dashboard');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to login';
+      toast({ title: 'Login failed', description: message, variant: 'destructive' });
+    }
     setSubmitting(false);
+  };
+
+  const handleDevLogin = (role: AppRole) => {
+    auth.signInAsDevRole(role);
+    window.location.assign('/dashboard');
   };
 
   return (
@@ -52,6 +64,16 @@ const Login = () => {
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? 'Signing in...' : 'Sign In'}
             </Button>
+            {devAuthEnabled && (
+              <div className="w-full space-y-2">
+                <p className="text-xs text-muted-foreground text-center">Dev role login</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleDevLogin('student')}>Student</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleDevLogin('advisor')}>Advisor</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleDevLogin('dil_admin')}>DIL Admin</Button>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between w-full text-sm">
               <Link to="/signup" className="text-primary hover:underline">Create account</Link>
               <Link to="/forgot-password" className="text-muted-foreground hover:underline">Forgot password?</Link>

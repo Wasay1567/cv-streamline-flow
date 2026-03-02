@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { backend } from '@/integrations/api/backend';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,29 +48,31 @@ const AdminDashboard = () => {
   const [notifySending, setNotifySending] = useState(false);
 
   const fetchData = async () => {
-    const [{ data: profs }, { data: subs }, { data: rls }] = await Promise.all([
-      supabase.from('profiles').select('*'),
-      supabase.from('cv_submissions').select('*, profiles!cv_submissions_student_id_fkey(*)'),
-      supabase.from('user_roles').select('*'),
-    ]);
-    setProfiles((profs as Profile[]) || []);
-    setSubmissions((subs as any[]) || []);
-    setRoles((rls as any[]) || []);
-    setLoading(false);
+    try {
+      const [profs, subs, rls] = await Promise.all([
+        backend.listProfiles(),
+        backend.listSubmissions(),
+        backend.listUserRoles(),
+      ]);
+      setProfiles((profs as Profile[]) || []);
+      setSubmissions((subs as any[]) || []);
+      setRoles((rls as any[]) || []);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
 
   const handleFinalApprove = async (id: string) => {
-    await supabase.from('cv_submissions').update({ status: 'approved' }).eq('id', id);
+    await backend.updateSubmissionStatus(id, 'approved');
     toast({ title: 'CV approved!' });
     fetchData();
   };
 
   const handleRoleChange = async () => {
     if (!roleDialog) return;
-    await supabase.from('user_roles').delete().eq('user_id', roleDialog.userId);
-    await supabase.from('user_roles').insert({ user_id: roleDialog.userId, role: newRole });
+    await backend.setUserRole(roleDialog.userId, newRole);
     toast({ title: 'Role updated', description: `${roleDialog.email} is now ${newRole}` });
     setRoleDialog(null);
     fetchData();
@@ -79,18 +81,16 @@ const AdminDashboard = () => {
   const handleBulkNotify = async () => {
     setNotifySending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('bulk-notify', {
-        body: {
-          subject: notifySubject,
-          body: notifyBody,
-          deadline: notifyDeadline || undefined,
-        },
+      const data = await backend.bulkNotifyStudents({
+        subject: notifySubject,
+        body: notifyBody,
+        deadline: notifyDeadline || undefined,
       });
-      if (error) throw error;
       toast({ title: 'Notifications sent!', description: `Emailed ${data?.sent || 0} students.` });
       setNotifyDialog(false);
-    } catch (err: any) {
-      toast({ title: 'Error sending notifications', description: err.message, variant: 'destructive' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send notifications';
+      toast({ title: 'Error sending notifications', description: message, variant: 'destructive' });
     }
     setNotifySending(false);
   };

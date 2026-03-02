@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { auth } from '@/integrations/api/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,12 +24,13 @@ const ResetPassword = () => {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await auth.resetPassword(password);
       toast({ title: 'Password updated', description: 'You can now sign in with your new password.' });
       navigate('/login');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to update password';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
     }
     setSubmitting(false);
   };
