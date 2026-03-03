@@ -17,20 +17,15 @@ import type { CVData, AcademicRecord, Internship, Reference, CVSubmission } from
 import { Plus, Trash2, ChevronLeft, ChevronRight, Save, Send } from 'lucide-react';
 
 const STEPS = ['Personal Info', 'Academics', 'FYP Details', 'Career Counseling', 'Internships', 'Industrial Visits', 'Certificates & Achievements', 'Skills', 'Extra-Curricular', 'References'];
-type FieldPath = Array<string | number>;
-type ListKey = 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular';
-const pathKey = (path: FieldPath) => path.map(String).join('.');
-const isSamePath = (a: FieldPath, b: FieldPath) => a.length === b.length && a.every((segment, index) => String(segment) === String(b[index]));
+type FieldPath = Array<string | number>; // A path to a field in the CV data, e.g. ['personalInfo', 'name'] or ['academics', 0, 'degree']
+type ListKey = 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular'; // Keys in CVData that represent lists of strings or objects with string fields
+const pathKey = (path: FieldPath) => path.map(String).join('.'); // Converts a field path to a string key for tracking touched fields and errors, e.g. ['personalInfo', 'name'] -> 'personalInfo.name'
+const isSamePath = (a: FieldPath, b: FieldPath) => a.length === b.length && a.every((segment, index) => String(segment) === String(b[index])); // Compares two field paths for equality, Used to find validation errors for specific fields in the CV data and return the error message if it exists. It does so by comparing the provided path with the paths of all validation errors returned by Zod. If a matching path is found, it returns the corresponding error message; otherwise, it returns null.
 
-// This lives OUTSIDE the main component
+// This lives OUTSIDE the main component to avoid the rerendering messing with the input components at step 7 and later
 const StringListSection = ({ 
-  title, 
-  listKey, 
-  cvData, 
-  updateList, 
-  removeFromList, 
-  addToList 
-}: { 
+  title, listKey, cvData, updateList, removeFromList, addToList 
+} : { 
   title: string; 
   listKey: ListKey; 
   cvData: CVData;
@@ -126,28 +121,39 @@ const CVForm = () => {
   };
 
   // Dynamic list helpers
-  const addAcademic = () => setCvData(prev => ({ ...prev, academics: [...prev.academics, { degree: '', university: '', year: '', gpa: '', majors: '' }] }));
-  const removeAcademic = (i: number) => setCvData(prev => ({ ...prev, academics: prev.academics.filter((_, idx) => idx !== i) }));
+
+  // Academics
+  const addAcademic = () => {
+    setCvData(prev => (
+      { ...prev, academics: [...prev.academics, { degree: '', university: '', year: '', gpa: '', majors: '' }] }
+    ));
+  }
+  const removeAcademic = (i: number) => {
+    setCvData(prev => (
+      { ...prev, academics: prev.academics.filter((_, idx) => idx !== i) }
+    ));
+  }
   const updateAcademic = (i: number, field: keyof AcademicRecord, value: string) => {
     setCvData(prev => ({ ...prev, academics: prev.academics.map((a, idx) => idx === i ? { ...a, [field]: value } : a) }));
   };
 
+  // Industrial visits
   const addListItem = (key: keyof CVData, initialValue: any) => {
-  setCvData(prev => ({ ...prev, [key]: [...(prev[key] as any[]), initialValue] }));
-};
+    setCvData(prev => ({ ...prev, [key]: [...(prev[key] as any[]), initialValue] }));
+  };
 
-const removeListItem = (key: keyof CVData, i: number) => {
-  setCvData(prev => ({ ...prev, [key]: (prev[key] as any[]).filter((_, idx) => idx !== i) }));
-};
+  const removeListItem = (key: keyof CVData, i: number) => {
+    setCvData(prev => ({ ...prev, [key]: (prev[key] as any[]).filter((_, idx) => idx !== i) }));
+  };
 
-const updateListItem = (key: keyof CVData, i: number, field: string, value: string) => {
-  setCvData(prev => ({
-    ...prev,
-    [key]: (prev[key] as any[]).map((item, idx) => 
-      idx === i ? { ...item, [field]: value } : item
-    )
-  }));
-};
+  const updateListItem = (key: keyof CVData, i: number, field: string, value: string) => {
+    setCvData(prev => ({
+      ...prev,
+      [key]: (prev[key] as any[]).map((item, idx) => 
+        idx === i ? { ...item, [field]: value } : item
+      )
+    }));
+  };
 
   const addInternship = () => setCvData(prev => ({ ...prev, internships: [...prev.internships, { organization: '', position: '', field: '', from: '', to: '' }] }));
   const removeInternship = (i: number) => setCvData(prev => ({ ...prev, internships: prev.internships.filter((_, idx) => idx !== i) }));
@@ -190,8 +196,13 @@ const updateListItem = (key: keyof CVData, i: number, field: string, value: stri
   const submitCV = async () => {
     if (!user) return;
     setSaving(true);
-    const payload = { student_id: user.id, cv_data: cvData as any, status: 'pending_advisor' as const, submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    console.log("Final CV Submission Payload", payload)
+    const payload = {
+       student_id: user.id,
+       cv_data: cvData as any,
+       status: 'pending_advisor' as const,
+       submitted_at: new Date().toISOString(),
+       updated_at: new Date().toISOString() };
+    console.log("Final CV Submission Payload", payload) 
     try {
       await backend.saveMySubmission(payload);
       toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
@@ -216,6 +227,8 @@ const updateListItem = (key: keyof CVData, i: number, field: string, value: stri
   //     <Button type="button" variant="outline" size="sm" onClick={() => addToList(listKey)} className="gap-1"><Plus className="h-4 w-4" /> Add {title}</Button>
   //   </div>
   // );
+
+  const isFormValid = cvSchema.safeParse(cvData).success;
 
   return (
     <AppLayout>
@@ -465,89 +478,89 @@ const updateListItem = (key: keyof CVData, i: number, field: string, value: stri
             )}
 
             {step === 5 && (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <h3 className="text-lg font-medium">Industrial Visits</h3>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => addListItem("industrialVisits", { organization: "", purpose: "", date: "" })}
-        className="gap-1"
-      >
-        <Plus className="h-4 w-4" /> Add Visit
-      </Button>
-    </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium">Industrial Visits</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addListItem("industrialVisits", { organization: "", purpose: "", date: "" })}
+                    className="gap-1"
+                  >
+                    <Plus className="h-4 w-4" /> Add Visit
+                  </Button>
+                </div>
 
-    <div className="space-y-4">
-      {cvData.industrialVisits.map((visit: any, i: number) => (
-        <div key={i} className="border rounded-lg p-4 space-y-3 relative group">
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-sm text-muted-foreground">Visit #{i + 1}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => removeListItem("industrialVisits", i)}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
+                <div className="space-y-4">
+                  {cvData.industrialVisits.map((visit: any, i: number) => (
+                    <div key={i} className="border rounded-lg p-4 space-y-3 relative group">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm text-muted-foreground">Visit #{i + 1}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeListItem("industrialVisits", i)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Organization</Label>
-              <Input
-                value={visit.organization || ""}
-                placeholder="e.g., Toyota Indus Motors"
-                className={fieldClass(["industrialVisits", i, "organization"])}
-                onChange={(e) => updateListItem("industrialVisits", i, "organization", e.target.value)}
-                onBlur={() => validateField(["industrialVisits", i, "organization"])}
-              />
-              {fieldError(["industrialVisits", i, "organization"]) && (
-                <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "organization"])}</p>
-              )}
-            </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Organization</Label>
+                          <Input
+                            value={visit.organization || ""}
+                            placeholder="e.g., Toyota Indus Motors"
+                            className={fieldClass(["industrialVisits", i, "organization"])}
+                            onChange={(e) => updateListItem("industrialVisits", i, "organization", e.target.value)}
+                            onBlur={() => validateField(["industrialVisits", i, "organization"])}
+                          />
+                          {fieldError(["industrialVisits", i, "organization"]) && (
+                            <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "organization"])}</p>
+                          )}
+                        </div>
 
-            <div className="space-y-2">
-              <Label>Purpose</Label>
-              <Input
-                value={visit.purpose || ""}
-                placeholder="e.g., Production Line Study"
-                className={fieldClass(["industrialVisits", i, "purpose"])}
-                onChange={(e) => updateListItem("industrialVisits", i, "purpose", e.target.value)}
-                onBlur={() => validateField(["industrialVisits", i, "purpose"])}
-              />
-              {fieldError(["industrialVisits", i, "purpose"]) && (
-                <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "purpose"])}</p>
-              )}
-            </div>
+                        <div className="space-y-2">
+                          <Label>Purpose</Label>
+                          <Input
+                            value={visit.purpose || ""}
+                            placeholder="e.g., Production Line Study"
+                            className={fieldClass(["industrialVisits", i, "purpose"])}
+                            onChange={(e) => updateListItem("industrialVisits", i, "purpose", e.target.value)}
+                            onBlur={() => validateField(["industrialVisits", i, "purpose"])}
+                          />
+                          {fieldError(["industrialVisits", i, "purpose"]) && (
+                            <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "purpose"])}</p>
+                          )}
+                        </div>
 
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input
-                value={visit.date || ""}
-                placeholder="e.g., Oct 2023"
-                className={fieldClass(["industrialVisits", i, "date"])}
-                onChange={(e) => updateListItem("industrialVisits", i, "date", e.target.value)}
-                onBlur={() => validateField(["industrialVisits", i, "date"])}
-              />
-              {fieldError(["industrialVisits", i, "date"]) && (
-                <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "date"])}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-      
-      {cvData.industrialVisits.length === 0 && (
-        <p className="text-sm text-center text-muted-foreground py-4 border border-dashed rounded-lg">
-          No industrial visits added yet.
-        </p>
-      )}
-    </div>
-  </div>
-)}
+                        <div className="space-y-2">
+                          <Label>Date</Label>
+                          <Input
+                            value={visit.date || ""}
+                            placeholder="e.g., Oct 2023"
+                            className={fieldClass(["industrialVisits", i, "date"])}
+                            onChange={(e) => updateListItem("industrialVisits", i, "date", e.target.value)}
+                            onBlur={() => validateField(["industrialVisits", i, "date"])}
+                          />
+                          {fieldError(["industrialVisits", i, "date"]) && (
+                            <p className="text-xs text-destructive">{fieldError(["industrialVisits", i, "date"])}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {cvData.industrialVisits.length === 0 && (
+                    <p className="text-sm text-center text-muted-foreground py-4 border border-dashed rounded-lg">
+                      No industrial visits added yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {step === 6 && (
               <div className="space-y-6">
@@ -582,22 +595,42 @@ const updateListItem = (key: keyof CVData, i: number, field: string, value: stri
           </CardContent>
         </Card>
 
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="gap-1">
+        <div className="flex justify-between items-start pt-4">
+          <Button 
+            variant="outline" 
+            onClick={() => setStep(Math.max(0, step - 1))} 
+            disabled={step === 0} 
+            className="gap-1"
+          >
             <ChevronLeft className="h-4 w-4" /> Previous
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={saveDraft} disabled={saving} className="gap-1">
-              <Save className="h-4 w-4" /> Save Draft
-            </Button>
-            {step < STEPS.length - 1 ? (
-              <Button onClick={() => setStep(step + 1)} className="gap-1">
-                Next <ChevronRight className="h-4 w-4" />
+          
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={saveDraft} disabled={saving} className="gap-1">
+                <Save className="h-4 w-4" /> Save Draft
               </Button>
-            ) : (
-              <Button onClick={submitCV} disabled={saving} className="gap-1">
-                <Send className="h-4 w-4" /> Submit CV
-              </Button>
+              
+              {step < STEPS.length - 1 ? (
+                <Button onClick={() => setStep(step + 1)} className="gap-1">
+                  Next <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button 
+                  onClick={submitCV} 
+                  disabled={saving || !isFormValid} 
+                  className="gap-1"
+                >
+                  <Send className="h-4 w-4" /> Submit CV
+                </Button>
+              )}
+            </div>
+            
+            {/* The Helper Text - Only shows on the final step if the form is invalid */}
+            {step === STEPS.length - 1 && !isFormValid && (
+              <span className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
+                *Please fill all required fields to submit
+              </span>
             )}
           </div>
         </div>
