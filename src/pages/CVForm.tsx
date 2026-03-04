@@ -85,6 +85,41 @@ const CVForm = () => {
     });
   }, [user]);
 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const handleGenerateCV = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent accidental form submissions if inside a <form> tag
+    setIsGenerating(true);
+
+    // PASTE YOUR GOOGLE WEB APP URL HERE 👇
+    const GOOGLE_SCRIPT_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL; 
+
+    try {
+      // We send this as 'text/plain' to bypass Google's strict CORS rules
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8", 
+        },
+        body: JSON.stringify(cvData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Success! Pop open the PDF in a new browser tab
+        window.open(result.pdfUrl, "_blank");
+      } else {
+        console.error("Generation Error:", result.error);
+        alert("Failed to generate CV. Check the console for details.");
+      }
+    } catch (error) {
+      console.error("Network Error:", error);
+      alert("Failed to connect to the generator. Are you offline?");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const getFieldError = (path: FieldPath) => {
     const result = cvSchema.safeParse(cvData);
     if (result.success) return null;
@@ -616,16 +651,16 @@ const CVForm = () => {
                   Next <ChevronRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <Button 
-                  onClick={submitCV} 
-                  disabled={saving || !isFormValid} 
-                  className="gap-1"
-                >
-                  <Send className="h-4 w-4" /> Submit CV
-                </Button>
+                <button 
+        onClick={handleGenerateCV} 
+        disabled={isGenerating}
+        className="bg-[#0f172a] text-white px-6 py-2 rounded-md hover:bg-slate-800 disabled:opacity-50 transition-all font-bold"
+      >
+        {isGenerating ? "Generating Official CV..." : "Submit & Download CV"}
+      </button>
               )}
             </div>
-            
+
             {/* The Helper Text - Only shows on the final step if the form is invalid */}
             {step === STEPS.length - 1 && !isFormValid && (
               <span className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
