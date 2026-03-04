@@ -7,16 +7,16 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/integrations/api/client';
-import type { AppRole } from '@/types/cv';
 import { FileText } from 'lucide-react';
 import { DEPARTMENTS } from '@/types/cv';
 
-const departments = DEPARTMENTS
+type SyncRole = 'student' | 'advisor';
+
+const departments = DEPARTMENTS;
 
 const roles = [
   { value: 'student' as const, label: 'Student' },
   { value: 'advisor' as const, label: 'Advisor' },
-  { value: 'dil_admin' as const, label: 'DIL Admin' },
 ];
 
 export default function SetupUserProfile() {
@@ -25,7 +25,7 @@ export default function SetupUserProfile() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [department, setDepartment] = useState('');
-  const [role, setRole] = useState<AppRole | ''>('');
+  const [role, setRole] = useState<SyncRole | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isLoaded) return null;
@@ -52,14 +52,13 @@ export default function SetupUserProfile() {
       // Get the session token from Clerk
       const token = await session?.getToken({ template: 'default' });
       
-      // Send the profile setup to your backend
+      // Send the profile setup to backend /user/sync
+      // Note: Backend expects lowercase 'department' and role must be 'student' or 'advisor'
       await api.post(
-        '/users/setup-profile',
+        '/user/sync',
         {
+          role: role as SyncRole,
           department,
-          role,
-          email: user.primaryEmailAddress?.emailAddress,
-          name: user.fullName,
         },
         { token: token || '' }
       );
@@ -112,7 +111,7 @@ export default function SetupUserProfile() {
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={(value) => setRole(value as AppRole)}>
+              <Select value={role} onValueChange={(value) => setRole(value as SyncRole)}>
                 <SelectTrigger id="role" className="w-full">
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
@@ -124,6 +123,7 @@ export default function SetupUserProfile() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Contact admin for DIL Admin role</p>
             </div>
           </CardContent>
           <CardFooter>

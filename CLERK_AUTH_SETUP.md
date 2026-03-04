@@ -38,7 +38,7 @@ User → Google Sign-In (Clerk) → Setup Profile Form → Dashboard
 2. Clerk's SignIn component (with Google OAuth enabled) takes over
 3. After successful authentication, user is redirected to `/setup-profile`
 4. User selects their department and role
-5. Profile data is sent to your backend via `/users/setup-profile` endpoint
+5. Profile data is sent to your backend via `/user/sync` endpoint
 6. User is redirected to `/dashboard`
 
 ### 3. **Files Modified**
@@ -81,9 +81,11 @@ VITE_CLERK_PUBLISHABLE_KEY="your_clerk_publishable_key_here"
 
 Your backend needs to implement these endpoints. **All requests include a Clerk JWT token in the Authorization header that must be verified.**
 
-### 1. **POST `/users/setup-profile`**
+### 1. **POST `/user/sync`**
 
-**Frontend sends:** Clerk JWT + User Profile Data
+Called after user completes the profile setup form to sync user data with backend.
+
+**Frontend sends:** Clerk JWT + Role & Department
 
 **Request Header:**
 ```
@@ -93,32 +95,60 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 **Request Body:**
 ```json
 {
-  "department": "Mechanical Engineering",
   "role": "student",
-  "email": "user@example.com",
-  "name": "John Doe"
+  "department": "Mechanical Engineering"
 }
 ```
 
-**Backend Processing (The Flow You Described):**
-1. ✅ **Receive** JWT from `Authorization: Bearer` header
-2. ✅ **Verify** JWT with Clerk using your Secret Key
-3. ✅ **Extract** Clerk user ID from JWT (`sub` claim)
-4. ✅ **Save to database:**
-   - `clerk_user_id` (from verified JWT)
-   - `department` (from request body)
-   - `role` (from request body)
-   - `email` (from request body)
-   - `name` (from request body)
-   - `profile_setup_complete` = `true`
-5. ✅ **Give green light** - return success response
+**Note:** 
+- Field names are lowercase: `department` (not `Department`)
+- `role` must be exactly `"student"` or `"advisor"` (not `dil_admin`)
+- All other user data is extracted from the Clerk JWT by the backend
+
+**Backend Processing:**
+1. ✅ **Middleware** verifies JWT with Clerk and injects the current user
+2. ✅ **Endpoint receives:**
+   - JWT token (via Authorization header middleware)
+   - Current `user` object with `clerk_user_id` already extracted
+   - Request body with `role` and `department`
+3. ✅ **Controller** (`sync_user_preferences_controller`):
+   - Receives: db session, clerk_user_id, department, role
+   - Saves/syncs user data to database
+   - Returns user object
+4. ✅ **Give green light** - returns created/updated user object
 
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Profile setup completed"
+  "user": {
+    "id": "user_123...",
+    "clerk_user_id": "user_2eF8...",
+    "role": "student",
+    "department": "Mechanical Engineering",
+    "email": "user@example.com",
+    "profile_setup_complete": true
+  }
 }
+```
+
+**Backend Code Reference:**
+```python
+class SyncUserRequest(BaseModel):
+    department: str = Field(..., min_length=1, max_length=150)
+    role: Literal["student", "advisor"]
+
+@router.post("/user/sync")
+async def sync_user_data(
+    req: SyncUserRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await sync_user_preferences_controller(
+        db=db,
+        clerk_user_id=user.clerk_user_id,
+        department=req.department,
+        role=req.role,
+    )
 ```
 
 ### 2. **GET `/users/profile`**
@@ -141,7 +171,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 {
   "profileSetupComplete": true,
   "role": "student",
-  "department": "Mechanical Engineering"
+  "department": "Department of Mechanical Engineering"
 }
 ```
 
@@ -208,22 +238,19 @@ This is exactly what you described:
        │              │   (Your API) │
        │              └──────────────┘
        │                     ▲
-       │ 4. Send POST /users/setup-profile
+       │ 4. Send POST /user/sync
        │    with JWT in Authorization header
        ├────────────────────────────────────────>
        │    Authorization: Bearer <JWT>
-       │    Body: { department, role, email, name }
+       │    Body: { role: "student", department: "..." }
        │
-       │    Backend receives JWT:
-       │    ✅ Step 1: Verify JWT with Clerk (using CLERK_SECRET_KEY)
-       │              ✓ Decode and validate signature
-       │              ✓ Check expiration
-       │              ✓ Verify claims
-       │    ✅ Step 2: Extract Clerk user ID from JWT ("sub" claim)
-       │    ✅ Step 3: Save to database:
+       │    Backend receives request:
+       │    ✅ Middleware: Verify JWT → Extract Clerk user ID → Inject user
+       │    ✅ Endpoint: Receive (user, role, department)
+       │    ✅ Controller: Sync user data to database
        │              - clerk_user_id
-       │              - department
        │              - role
+       │              - department
        │              - profile_setup_complete = true
        │    ✅ Step 4: Return success (green light)
        │
@@ -294,23 +321,35 @@ async function verifyClerkToken(req, res, next) {
   }
 }
 
-// Setup profile endpoint
-app.post('/users/setup-profile', verifyClerkToken, async (req, res) => {
+// Sync user profile endpoint
+app.post('/user/sync', verifyClerkToken, async (req, res) => {
   try {
     const clerkUserId = req.clerkUserId;
-    const { department, role, email, name } = req.body;
+    const { department, role } = req.body;
 
-    // Save to database
+    // Validate role is only 'student' or 'advisor'
+    if (!['student', 'advisor'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    // Validate department length
+    if (!department || department.length < 1 || department.length > 150) {
+      return res.status(400).json({ error: 'Invalid department' });
+    }
+
+    // Save/sync user to database
     const user = await db.users.create({
       clerk_user_id: clerkUserId,
       department,
       role,
-      email,
-      name,
       profile_setup_complete: true,
     });
 
-    res.json({ success: true, message: 'Profile setup completed' });
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to sync user' });
+  }
+});
   } catch (error) {
     res.status(500).json({ error: 'Failed to setup profile' });
   }
@@ -367,28 +406,36 @@ def verify_clerk_token():
     except Exception as e:
         return None, 'Invalid token', 401
 
-@app.route('/users/setup-profile', methods=['POST'])
-def setup_profile():
+@app.route('/user/sync', methods=['POST'])
+def sync_user_profile():
     clerk_user_id, error, status = verify_clerk_token()
     if error:
         return jsonify({'error': error}), status
 
     try:
         data = request.json
+        department = data.get('department')
+        role = data.get('role')
         
-        # Save to database
+        # Validate role is only 'student' or 'advisor'
+        if role not in ['student', 'advisor']:
+            return jsonify({'error': 'Invalid role'}), 400
+        
+        # Validate department
+        if not department or len(department) < 1 or len(department) > 150:
+            return jsonify({'error': 'Invalid department'}), 400
+        
+        # Save/sync user to database
         user = User(
             clerk_user_id=clerk_user_id,
-            department=data['department'],
-            role=data['role'],
-            email=data['email'],
-            name=data['name'],
+            department=department,
+            role=role,
             profile_setup_complete=True
         )
         db.session.add(user)
         db.session.commit()
 
-        return jsonify({'success': True, 'message': 'Profile setup completed'})
+        return jsonify({'user': user.to_dict()})
     except Exception as e:
         return jsonify({'error': 'Failed to setup profile'}), 500
 
@@ -437,7 +484,7 @@ const { session } = useClerk();
 const token = await session?.getToken({ template: 'default' });
 
 // Send it with your request
-await api.post('/users/setup-profile', data, { token });
+await api.post('/user/sync', { role: 'student', department: 'Mechanical Engineering' }, { token });
 // Creates header: Authorization: Bearer <JWT>
 ```
 
@@ -518,9 +565,12 @@ Click the dev buttons to instantly log in as a specific role for testing (bypass
 1. Run your frontend: `npm run dev` or `bun dev`
 2. Click "Sign In"
 3. Use Google OAuth to authenticate
-4. Fill in the department and role form
-5. Verify that your backend receives the `/users/setup-profile` request
-6. User should be redirected to dashboard
+4. Fill in the department and role form (only student/advisor roles work)
+5. Verify that your backend receives the `POST /user/sync` request with:
+   - Authorization header with Clerk JWT
+   - Body: `{ role: "student", department: "..." }`
+6. Backend should return user object
+7. User should be redirected to dashboard
 
 ---
 
@@ -536,10 +586,18 @@ Click the dev buttons to instantly log in as a specific role for testing (bypass
 - Check that Google OAuth is enabled in Clerk dashboard
 - Check browser console for errors
 
-### User stuck on setup page
-- Check backend `/users/setup-profile` endpoint is responding correctly
-- Check browser Network tab to see the API request
-- Verify token is being sent correctly
+### User stuck on setup page or getting errors
+- Check backend `POST /user/sync` endpoint is implemented correctly
+- Check that JWT verification middleware is working
+- Verify token is being sent in Authorization header
+- Check browser Network tab to see the actual request and response
+- Ensure request body matches spec: `{ role: "student", department: "..." }`
+- Verify role is only "student" or "advisor" (not "dil_admin")
+
+### "Invalid role" or "Invalid department" errors
+- Frontend should only allow student/advisor roles in the dropdown
+- Department must be non-empty and max 150 characters
+- Check the exact field names: lowercase `department`, not `Department`
 
 ### Profile not loading after setup
 - Ensure backend `/users/profile` endpoint is implemented
