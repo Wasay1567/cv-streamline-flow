@@ -13,6 +13,7 @@ import Dashboard from "@/pages/Dashboard";
 import CVForm from "@/pages/CVForm";
 import Students from "@/pages/Students";
 import Admin from "@/pages/Admin";
+import SetupUserProfile from "@/pages/SetupUserProfile";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/setup-profile" element={<ProtectedRoute requireProfileSetup={false}><SetupUserProfile /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/cv-form" element={<ProtectedRoute allowedRoles={['student']}><CVForm /></ProtectedRoute>} />
             <Route path="/students" element={<ProtectedRoute allowedRoles={['advisor', 'dil_admin']}><Students /></ProtectedRoute>} />

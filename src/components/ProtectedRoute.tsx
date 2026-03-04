@@ -5,10 +5,11 @@ import type { AppRole } from '@/types/cv';
 interface Props {
   children: React.ReactNode;
   allowedRoles?: AppRole[];
+  requireProfileSetup?: boolean;
 }
 
-const ProtectedRoute = ({ children, allowedRoles }: Props) => {
-  const { user, role, loading } = useAuth();
+const ProtectedRoute = ({ children, allowedRoles, requireProfileSetup = true }: Props) => {
+  const { user, role, loading, profileSetupComplete } = useAuth();
 
   if (loading) {
     return (
@@ -19,7 +20,24 @@ const ProtectedRoute = ({ children, allowedRoles }: Props) => {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  // Check if profile setup is required and not completed
+  if (requireProfileSetup && !profileSetupComplete) {
+    return <Navigate to="/setup-profile" replace />;
+  }
+
+  // Check role-based access
   if (allowedRoles && role && !allowedRoles.includes(role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Allow setup route for logged-in users without full protection
+  if (!requireProfileSetup) {
+    return <>{children}</>;
+  }
+
+  // Require role if role-based access is specified
+  if (allowedRoles && !role) {
     return <Navigate to="/dashboard" replace />;
   }
 
