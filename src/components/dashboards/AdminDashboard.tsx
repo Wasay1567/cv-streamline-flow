@@ -22,6 +22,7 @@ const AdminDashboard = () => {
   const [submissions, setSubmissions] = useState<(CVSubmission & { profiles: Profile })[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<{ user_id: string; role: AppRole }[]>([]);
+  const [pendingAdvisors, setPendingAdvisors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCV, setSelectedCV] = useState<CVSubmission | null>(null);
   const [tab, setTab] = useState('overview');
@@ -49,14 +50,16 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [profs, subs, rls] = await Promise.all([
+      const [profs, subs, rls, advisors] = await Promise.all([
         backend.listProfiles(),
         backend.listSubmissions(),
         backend.listUserRoles(),
+        backend.getPendingAdvisors(),
       ]);
       setProfiles((profs as Profile[]) || []);
       setSubmissions((subs as any[]) || []);
       setRoles((rls as any[]) || []);
+      setPendingAdvisors((advisors as any[]) || []);
     } finally {
       setLoading(false);
     }
@@ -93,6 +96,28 @@ const AdminDashboard = () => {
       toast({ title: 'Error sending notifications', description: message, variant: 'destructive' });
     }
     setNotifySending(false);
+  };
+
+  const handleApproveAdvisor = async (advisorId: string) => {
+    try {
+      await backend.approveAdvisor(advisorId);
+      toast({ title: 'Advisor approved!', description: 'The advisor has been activated.' });
+      fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to approve advisor';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    }
+  };
+
+  const handleRejectAdvisor = async (advisorId: string) => {
+    try {
+      await backend.rejectAdvisor(advisorId);
+      toast({ title: 'Advisor rejected', description: 'The pending advisor request has been rejected.' });
+      fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to reject advisor';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    }
   };
 
   // Stats
@@ -153,6 +178,7 @@ const AdminDashboard = () => {
           <TabsTrigger value="pending" className="gap-1"><CheckCircle className="h-4 w-4" /> Pending ({pendingDil.length})</TabsTrigger>
           <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" /> Users</TabsTrigger>
           <TabsTrigger value="roles" className="gap-1"><Shield className="h-4 w-4" /> Roles</TabsTrigger>
+          <TabsTrigger value="advisors" className="gap-1"><Users className="h-4 w-4" /> Pending Advisors ({pendingAdvisors.length})</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -407,6 +433,64 @@ const AdminDashboard = () => {
                   </Card>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Pending Advisors Tab */}
+        <TabsContent value="advisors" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending Advisor Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {pendingAdvisors.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No pending advisor requests</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Applied On</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingAdvisors.map((advisor) => (
+                        <TableRow key={advisor.advisor_id}>
+                          <TableCell className="font-medium">{advisor.name}</TableCell>
+                          <TableCell>{advisor.email}</TableCell>
+                          <TableCell>{advisor.department}</TableCell>
+                          <TableCell>{new Date(advisor.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleApproveAdvisor(advisor.advisor_id)}
+                                className="gap-1"
+                              >
+                                <CheckCircle className="h-4 w-4" /> Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleRejectAdvisor(advisor.advisor_id)}
+                                className="gap-1"
+                              >
+                                <X className="h-4 w-4" /> Reject
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

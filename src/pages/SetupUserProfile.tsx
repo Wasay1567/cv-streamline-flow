@@ -7,8 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/integrations/api/client';
+import { auth } from '@/integrations/api/auth';
 import { FileText } from 'lucide-react';
 import { DEPARTMENTS } from '@/types/cv';
+// import { sign } from 'crypto';
 
 type SyncRole = 'student' | 'advisor';
 
@@ -27,6 +29,8 @@ export default function SetupUserProfile() {
   const [department, setDepartment] = useState('');
   const [role, setRole] = useState<SyncRole | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {signOut} = useClerk();
 
   if (!isLoaded) return null;
 
@@ -62,6 +66,9 @@ export default function SetupUserProfile() {
         },
         { token: token || '' }
       );
+
+      // Mark profile as complete in localStorage
+      auth.setProfileSetupComplete(true);
 
       toast({
         title: 'Success',
@@ -136,6 +143,7 @@ export default function SetupUserProfile() {
             </Button>
           </CardFooter>
         </form>
+        <Button onClick={() => signOut()}>Sign out</Button>
       </Card>
     </div>
   );

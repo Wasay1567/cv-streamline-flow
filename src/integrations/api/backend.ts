@@ -20,6 +20,19 @@ export interface BulkNotifyResult {
   sent: number;
 }
 
+export interface PendingAdvisor {
+  advisor_id: string;
+  email: string;
+  name: string;
+  department: string;
+  created_at: string;
+}
+
+export interface AdvisorActionResult {
+  message: string;
+  advisor_id: string;
+}
+
 export const backend = {
   getMySubmission() {
     return api.get<CVSubmission | null>("/cv-submissions/me");
@@ -54,6 +67,18 @@ export const backend = {
 
   bulkNotifyStudents(payload: BulkNotifyPayload) {
     return api.post<BulkNotifyResult>("/notifications/bulk", payload);
+  },
+
+  getPendingAdvisors() {
+    return api.get<PendingAdvisor[]>("/admin/advisors/pending");
+  },
+
+  approveAdvisor(advisorId: string) {
+    return api.post<AdvisorActionResult>(`/admin/advisors/${advisorId}/approve`, {});
+  },
+
+  rejectAdvisor(advisorId: string) {
+    return api.post<AdvisorActionResult>(`/admin/advisors/${advisorId}/reject`, {});
   },
 };
 

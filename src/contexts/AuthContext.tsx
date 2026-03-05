@@ -49,8 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Use Clerk user
         if (clerkUser) {
-          const token = await session?.getToken({ template: 'default' });
-          
           const authUser: AuthUser = {
             id: clerkUser.id,
             email: clerkUser.primaryEmailAddress?.emailAddress || '',
@@ -59,20 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(authUser);
 
-          // Fetch user profile and role from backend
-          if (token) {
-            try {
-              const profile = await auth.getUserProfile(token);
-              if (profile) {
-                setProfileSetupComplete(profile.profileSetupComplete);
-                setRole(profile.role || null);
-              }
-            } catch {
-              // Profile endpoint may not exist yet on backend
-              setProfileSetupComplete(false);
-              setRole(null);
-            }
-          }
+          // Check if profile setup is complete (stored locally)
+          const profileComplete = auth.isProfileSetupComplete();
+          setProfileSetupComplete(profileComplete);
         } else {
           setUser(null);
           setRole(null);
@@ -89,13 +76,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     load();
-  }, [clerkUser, isLoaded, session]);
+  }, [clerkUser, isLoaded]);
 
   const signOut = async () => {
     try {
       if (auth.isDevAuthEnabled()) {
         auth.setStoredDevAuth(null);
       }
+      auth.clearProfileSetup();
       await clerkSignOut?.();
       setUser(null);
       setRole(null);

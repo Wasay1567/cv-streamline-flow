@@ -2,6 +2,7 @@ import { api } from "@/integrations/api/client";
 import type { AppRole } from "@/types/cv";
 
 const DEV_AUTH_STORAGE_KEY = "dev_auth_state";
+const PROFILE_SETUP_KEY = "profile_setup_complete";
 
 export interface AuthUser {
   id: string;
@@ -40,6 +41,23 @@ export const auth = {
     localStorage.setItem(DEV_AUTH_STORAGE_KEY, JSON.stringify(state));
   },
 
+  isProfileSetupComplete(): boolean {
+    const stored = localStorage.getItem(PROFILE_SETUP_KEY);
+    return stored === 'true';
+  },
+
+  setProfileSetupComplete(complete: boolean) {
+    if (complete) {
+      localStorage.setItem(PROFILE_SETUP_KEY, 'true');
+    } else {
+      localStorage.removeItem(PROFILE_SETUP_KEY);
+    }
+  },
+
+  clearProfileSetup() {
+    localStorage.removeItem(PROFILE_SETUP_KEY);
+  },
+
   signInAsDevRole(role: AppRole) {
     const devState: DevAuthState = {
       role,
@@ -64,18 +82,6 @@ export const auth = {
         ...(token && { token }),
       });
       return role.role;
-    } catch {
-      return null;
-    }
-  },
-
-  async getUserProfile(token: string): Promise<{ 
-    profileSetupComplete: boolean; 
-    role: AppRole | null;
-    department?: string;
-  } | null> {
-    try {
-      return await api.get("/users/profile", { token });
     } catch {
       return null;
     }
