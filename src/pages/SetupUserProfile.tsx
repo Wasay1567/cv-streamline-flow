@@ -54,8 +54,16 @@ export default function SetupUserProfile() {
     setIsSubmitting(true);
     try {
       // Get the session token from Clerk
-      const token = await session?.getToken({ template: 'default' });
+      if (!session) {
+        throw new Error('Session not available');
+      }
+
+      const token = await session.getToken();
       
+      if (!token) {
+        throw new Error('Failed to get authentication token');
+      }
+
       // Send the profile setup to backend /user/sync
       // Note: Backend expects lowercase 'department' and role must be 'student' or 'advisor'
       await api.post(
@@ -64,8 +72,9 @@ export default function SetupUserProfile() {
           role: role as SyncRole,
           department,
         },
-        { token: token || '' }
+        { token }
       );
+
 
       // Mark profile as complete in localStorage
       auth.setProfileSetupComplete(true);
@@ -76,6 +85,8 @@ export default function SetupUserProfile() {
       });
 
       navigate('/dashboard');
+      console.log("Profile setup complete, navigating to dashboard...");
+
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to set up profile';
       toast({

@@ -3,7 +3,7 @@ export interface ApiOptions {
 }
 
 const SESSION_STORAGE_KEY = "auth_session";
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   status: number;

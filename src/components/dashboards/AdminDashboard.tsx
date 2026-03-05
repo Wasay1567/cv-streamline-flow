@@ -16,6 +16,7 @@ import { Users, CheckCircle, BarChart3, Shield, Search, Mail, Filter, X } from '
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const AdminDashboard = () => {
   const { toast } = useToast();
@@ -40,6 +41,7 @@ const AdminDashboard = () => {
   const [batchFilter, setBatchFilter] = useState<string>('all');
   const [skillSearch, setSkillSearch] = useState('');
   const [minInternships, setMinInternships] = useState('');
+  const [sortByCGPA, setSortByCGPA] = useState(false);
 
   // Bulk notify
   const [notifyDialog, setNotifyDialog] = useState(false);
@@ -155,6 +157,15 @@ const AdminDashboard = () => {
       if (count < Number(minInternships)) return false;
     }
     return true;
+  }).sort((a, b) => {
+    if (sortByCGPA) {
+      const cvA = a.cv_data as CVData;
+      const cvB = b.cv_data as CVData;
+      const cgpaA = parseFloat(cvA?.academics?.[0]?.gpa || '0');
+      const cgpaB = parseFloat(cvB?.academics?.[0]?.gpa || '0');
+      return cgpaB - cgpaA; // Descending order
+    }
+    return 0;
   });
 
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>;
@@ -228,7 +239,7 @@ const AdminDashboard = () => {
               <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Advanced Filters</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 md:grid-cols-5">
+              <div className="grid gap-3 md:grid-cols-6">
                 <div className="space-y-1">
                   <Label className="text-xs">Status</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -271,9 +282,15 @@ const AdminDashboard = () => {
                   <Label className="text-xs">Min Internships</Label>
                   <Input type="number" min="0" placeholder="0" value={minInternships} onChange={e => setMinInternships(e.target.value)} />
                 </div>
+                <div className="space-y-1 flex items-end">
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="sort-cgpa" checked={sortByCGPA} onCheckedChange={(checked) => setSortByCGPA(checked as boolean)} />
+                    <Label htmlFor="sort-cgpa" className="text-xs cursor-pointer">Sort by CGPA ↓</Label>
+                  </div>
+                </div>
               </div>
-              {(statusFilter !== 'all' || deptFilter !== 'all' || batchFilter !== 'all' || skillSearch || minInternships) && (
-                <Button variant="ghost" size="sm" className="mt-2 gap-1" onClick={() => { setStatusFilter('all'); setDeptFilter('all'); setBatchFilter('all'); setSkillSearch(''); setMinInternships(''); }}>
+              {(statusFilter !== 'all' || deptFilter !== 'all' || batchFilter !== 'all' || skillSearch || minInternships || sortByCGPA) && (
+                <Button variant="ghost" size="sm" className="mt-2 gap-1" onClick={() => { setStatusFilter('all'); setDeptFilter('all'); setBatchFilter('all'); setSkillSearch(''); setMinInternships(''); setSortByCGPA(false); }}>
                   <X className="h-3 w-3" /> Clear Filters
                 </Button>
               )}
@@ -290,6 +307,7 @@ const AdminDashboard = () => {
                     <TableHead>Batch</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Skills</TableHead>
+                    <TableHead>CGPA</TableHead>
                     <TableHead>Internships</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -312,6 +330,7 @@ const AdminDashboard = () => {
                             {(cv?.skills?.length || 0) > 3 && <Badge variant="outline" className="text-xs">+{cv.skills.length - 3}</Badge>}
                           </div>
                         </TableCell>
+                        <TableCell className="font-semibold">{cv?.academics?.[0]?.gpa || '—'}</TableCell>
                         <TableCell>{cv?.internships?.length || 0}</TableCell>
                         <TableCell className="flex gap-2">
                           <Button size="sm" variant="outline" onClick={() => setSelectedCV(sub)}>View</Button>
@@ -325,7 +344,7 @@ const AdminDashboard = () => {
                     );
                   })}
                   {filteredCVs.length === 0 && (
-                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No CVs match filters</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No CVs match filters</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

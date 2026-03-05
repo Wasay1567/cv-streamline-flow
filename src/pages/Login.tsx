@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/integrations/api/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText } from 'lucide-react';
+// import { FileText } from 'lucide-react';
 
 const Login = () => {
   const { isLoaded } = useUser();
@@ -34,16 +34,6 @@ const Login = () => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6">
-        {/* Header Card */}
-        <Card className="text-center">
-          <CardHeader>
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
-            <CardTitle className="text-2xl">Welcome Back</CardTitle>
-            <CardDescription>Sign in to CV Automation System</CardDescription>
-          </CardHeader>
-        </Card>
 
         {/* Clerk SignIn Component */}
         <div className="flex justify-center">
