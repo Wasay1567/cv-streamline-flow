@@ -17,15 +17,30 @@ export class ApiError extends Error {
   }
 }
 
-function getStoredAccessToken() {
-  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-  if (!raw) return null;
+// function getStoredAccessToken() {
+//   const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+//   if (!raw) return null;
 
+//   try {
+//     const parsed = JSON.parse(raw) as { access_token?: string };
+//     return parsed.access_token || null;
+//   } catch {
+//     localStorage.removeItem(SESSION_STORAGE_KEY);
+//     return null;
+//   }
+// }
+
+async function getClerkToken() {
   try {
-    const parsed = JSON.parse(raw) as { access_token?: string };
-    return parsed.access_token || null;
-  } catch {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    // Clerk globally attaches itself to the window object in the browser
+    const clerk = (window as any).Clerk;
+    if (clerk && clerk.session) {
+      // Clerk's getToken() is asynchronous and handles refreshing automatically!
+      return await clerk.session.getToken();
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to get Clerk token:", error);
     return null;
   }
 }
@@ -38,12 +53,14 @@ async function request<T>(
   ): Promise<T> { 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "69420", // Bypass ngrok browser warning for API requests
   };
 
-  const token = options.token || getStoredAccessToken();
+  const token = options.token || await getClerkToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  // console.log(token);
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,

@@ -61,13 +61,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(authUser);
 
-          const token = await session?.getToken();
-          const fetchedRole = await auth.getUserRole(clerkUser.id, token || undefined);
-          setRole(fetchedRole);
+          // Check if role is stored in Clerk's metadata (after profile setup)
+          const clerkRole = (clerkUser.unsafeMetadata?.role as AppRole) || null;
+          const clerkProfileComplete = clerkUser.unsafeMetadata?.profileSetupComplete === true;
 
-          // Check if profile setup is complete (stored locally)
-          const profileComplete = auth.isProfileSetupComplete();
-          setProfileSetupComplete(profileComplete);
+          if (clerkRole) {
+            setRole(clerkRole);
+            setProfileSetupComplete(true);
+          } else {
+            // Fallback: fetch role from backend if not in Clerk metadata
+            const token = await session?.getToken();
+            const fetchedRole = await auth.getUserRole(clerkUser.id, token || undefined);
+            setRole(fetchedRole);
+
+            // Check if profile setup is complete (stored locally as backup)
+            const profileComplete = auth.isProfileSetupComplete();
+            setProfileSetupComplete(profileComplete || clerkProfileComplete);
+          }
         } else {
           setUser(null);
           setRole(null);
@@ -92,6 +102,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         auth.setStoredDevAuth(null);
       }
       auth.clearProfileSetup();
+      // Don't clear Clerk metadata - keep role/department persistent
+      // so user doesn't need to set up profile again on next sign in
       await clerkSignOut?.();
       setUser(null);
       setRole(null);

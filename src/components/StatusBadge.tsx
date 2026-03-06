@@ -9,8 +9,20 @@ const statusConfig: Record<CVStatus, { label: string; className: string }> = {
   rejected: { label: 'Rejected', className: 'bg-red-100 text-red-800 border-red-200' },
 };
 
-const StatusBadge = ({ status }: { status: CVStatus }) => {
-  const config = statusConfig[status];
+const StatusBadge = ({ status }: { status?: CVStatus | string }) => {
+  // 1. Safely try to get the config for the provided status
+  const config = status ? statusConfig[status as CVStatus] : null;
+
+  // 2. The Safety Net: If the status is undefined or doesn't exist in our dictionary
+  if (!config) {
+    return (
+      <Badge className="bg-gray-200 text-gray-700 border-gray-300">
+        Unknown Status
+      </Badge>
+    );
+  }
+
+  // 3. Normal rendering if the status is valid
   return <Badge className={config.className}>{config.label}</Badge>;
 };
 

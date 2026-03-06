@@ -31,7 +31,7 @@ export default function SetupUserProfile() {
   const [role, setRole] = useState<SyncRole | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const {signOut} = useClerk();
+  const { signOut } = useClerk();
 
   if (!isLoaded) return null;
 
@@ -76,10 +76,20 @@ export default function SetupUserProfile() {
         { token }
       );
 
+      // Store role in Clerk's user metadata so it persists across sessions
+      if (user) {
+        await user.update({
+          unsafeMetadata: {
+            role: role as SyncRole,
+            department,
+            profileSetupComplete: true,
+          },
+        });
+      }
 
       // Keep auth guard state in sync before navigating.
       setProfileSetupComplete(true);
-      setUserRole(role);
+      setUserRole(role as SyncRole);
 
       toast({
         title: 'Success',

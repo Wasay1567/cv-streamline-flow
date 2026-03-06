@@ -52,16 +52,42 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [profs, subs, rls, advisors] = await Promise.all([
-        backend.listProfiles(),
-        backend.listSubmissions(),
+      const [subs, rls, advisors] = await Promise.all([
+        backend.listCVs(),
         backend.listUserRoles(),
         backend.getPendingAdvisors(),
       ]);
-      setProfiles((profs as Profile[]) || []);
-      setSubmissions((subs as any[]) || []);
-      setRoles((rls as any[]) || []);
-      setPendingAdvisors((advisors as any[]) || []);
+      // Format CVListItem data for the admin dashboard
+      const formattedSubs = Array.isArray(subs) 
+        ? subs.map((sub: any) => ({
+            ...sub,
+            id: sub.cv_id,
+            status: sub.cv_status,
+            student_id: sub.student_email,
+            profiles: {
+              email: sub.student_email,
+              department: sub.department,
+              batch: sub.batch,
+            },
+          }))
+        : [];
+      
+      setSubmissions(formattedSubs);
+      setRoles(Array.isArray(rls) ? rls : []);
+      setPendingAdvisors(Array.isArray(advisors) ? advisors : []);
+      setProfiles([]); // No longer available from API
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+      const message = error instanceof Error ? error.message : 'Failed to load data';
+      toast({
+        title: 'Error loading dashboard',
+        description: message,
+        variant: 'destructive',
+      });
+      setSubmissions([]);
+      setRoles([]);
+      setPendingAdvisors([]);
+      setProfiles([]);
     } finally {
       setLoading(false);
     }
@@ -70,9 +96,14 @@ const AdminDashboard = () => {
   useEffect(() => { fetchData(); }, []);
 
   const handleFinalApprove = async (id: string) => {
-    await backend.updateSubmissionStatus(id, 'approved');
-    toast({ title: 'CV approved!' });
-    fetchData();
+    try {
+      await backend.approveCV(id);
+      toast({ title: 'CV approved!' });
+      fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to approve CV';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    }
   };
 
   const handleRoleChange = async () => {

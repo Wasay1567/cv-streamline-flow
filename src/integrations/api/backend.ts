@@ -6,6 +6,17 @@ export interface UserRole {
   role: AppRole;
 }
 
+export interface CVListItem {
+  cv_id: string;
+  student_email: string;
+  department: string;
+  batch: string;
+  cv_status: CVStatus;
+  skills: string[];
+  cgpa: string;
+  internships_count: number;
+}
+
 export interface SubmissionWithProfile extends CVSubmission {
   profiles: Profile;
 }
@@ -21,23 +32,75 @@ export interface BulkNotifyResult {
 }
 
 export interface PendingAdvisor {
-  advisor_id: string;
+  id: string;
   email: string;
-  name: string;
   department: string;
-  created_at: string;
 }
 
-export interface AdvisorActionResult {
+export interface ApproveRejectResult {
+  cv_id: string;
+  status: CVStatus;
+  rejection_comment?: string;
   message: string;
-  advisor_id: string;
 }
 
 export const backend = {
+  // User endpoints
+  syncUserProfile(payload: { department: string; role: "student" | "advisor" }) {
+    return api.post("/user/sync", payload);
+  },
+
+  // CV endpoints
+  createCV(payload: CVData) {
+    return api.post<CVSubmission>("/cv-submissions", payload);
+  },
+
+  listCVs() {
+    return api.get<CVListItem[]>("/cv-submissions");
+  },
+
   getMySubmission() {
     return api.get<CVSubmission | null>("/cv-submissions/me");
   },
 
+  getMyCVs() {
+    return api.get<CVSubmission[]>("/cv-submissions/me");
+  },
+
+  getCV(cvId: string) {
+    return api.get<CVSubmission>(`/cv-submissions/${cvId}`);
+  },
+
+  updateCV(cvId: string, payload: CVData) {
+    return api.put<CVSubmission>(`/cv-submissions/${cvId}`, payload);
+  },
+
+  deleteCV(cvId: string) {
+    return api.delete<{ message: string }>(`/cv-submissions/${cvId}`);
+  },
+
+  approveCV(cvId: string) {
+    return api.post<ApproveRejectResult>(`/cv-submissions/${cvId}/approve`, {});
+  },
+
+  rejectCV(cvId: string, comments?: string) {
+    return api.post<ApproveRejectResult>(`/cv-submissions/${cvId}/reject`, { comments });
+  },
+
+  // Admin endpoints
+  getPendingAdvisors() {
+    return api.get<PendingAdvisor[]>("/admin/advisors/pending");
+  },
+
+  approveAdvisor(advisorId: string) {
+    return api.post<{ message: string }>(`/admin/advisors/${advisorId}/approve`, {});
+  },
+
+  rejectAdvisor(advisorId: string) {
+    return api.post<{ message: string }>(`/admin/advisors/${advisorId}/reject`, {});
+  },
+
+  // Deprecated - keeping for backward compatibility
   saveMySubmission(payload: Partial<CVSubmission> & { cv_data: CVData; status: CVStatus }) {
     return api.put<CVSubmission>("/cv-submissions/me", payload);
   },
@@ -47,14 +110,16 @@ export const backend = {
   },
 
   listSubmissions() {
-    return api.get<SubmissionWithProfile[]>("/cv-submissions");
+    return api.get<CVListItem[]>("/cv-submissions");
   },
 
   updateSubmissionStatus(submissionId: string, status: CVStatus, advisorComments?: string) {
-    return api.patch<CVSubmission>(`/cv-submissions/${submissionId}/status`, {
-      status,
-      advisor_comments: advisorComments,
-    });
+    if (status === "rejected") {
+      return this.rejectCV(submissionId, advisorComments);
+    } else if (status === "pending_dil" || status === "approved") {
+      return this.approveCV(submissionId);
+    }
+    throw new Error("Invalid status");
   },
 
   listUserRoles() {
@@ -67,18 +132,6 @@ export const backend = {
 
   bulkNotifyStudents(payload: BulkNotifyPayload) {
     return api.post<BulkNotifyResult>("/notifications/bulk", payload);
-  },
-
-  getPendingAdvisors() {
-    return api.get<PendingAdvisor[]>("/admin/advisors/pending");
-  },
-
-  approveAdvisor(advisorId: string) {
-    return api.post<AdvisorActionResult>(`/admin/advisors/${advisorId}/approve`, {});
-  },
-
-  rejectAdvisor(advisorId: string) {
-    return api.post<AdvisorActionResult>(`/admin/advisors/${advisorId}/reject`, {});
   },
 };
 
