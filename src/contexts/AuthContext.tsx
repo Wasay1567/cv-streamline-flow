@@ -9,6 +9,8 @@ interface AuthContextType {
   role: AppRole | null;
   loading: boolean;
   profileSetupComplete: boolean;
+  setProfileSetupComplete: (complete: boolean) => void;
+  setUserRole: (role: AppRole | null) => void;
   signOut: () => Promise<void>;
 }
 
@@ -17,6 +19,8 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   loading: true,
   profileSetupComplete: false,
+  setProfileSetupComplete: () => {},
+  setUserRole: () => {},
   signOut: async () => {},
 });
 
@@ -57,6 +61,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(authUser);
 
+          const token = await session?.getToken();
+          const fetchedRole = await auth.getUserRole(clerkUser.id, token || undefined);
+          setRole(fetchedRole);
+
           // Check if profile setup is complete (stored locally)
           const profileComplete = auth.isProfileSetupComplete();
           setProfileSetupComplete(profileComplete);
@@ -76,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     load();
-  }, [clerkUser, isLoaded]);
+  }, [clerkUser, isLoaded, session]);
 
   const signOut = async () => {
     try {
@@ -93,8 +101,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const handleSetProfileSetupComplete = (complete: boolean) => {
+    auth.setProfileSetupComplete(complete);
+    setProfileSetupComplete(complete);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, role, loading, profileSetupComplete, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        role,
+        loading,
+        profileSetupComplete,
+        setProfileSetupComplete: handleSetProfileSetupComplete,
+        setUserRole: setRole,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/integrations/api/client';
-import { auth } from '@/integrations/api/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { FileText } from 'lucide-react';
 import { DEPARTMENTS } from '@/types/cv';
 // import { sign } from 'crypto';
@@ -24,6 +24,7 @@ const roles = [
 export default function SetupUserProfile() {
   const { user, isLoaded } = useUser();
   const { session } = useClerk();
+  const { setProfileSetupComplete, setUserRole } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [department, setDepartment] = useState('');
@@ -76,8 +77,9 @@ export default function SetupUserProfile() {
       );
 
 
-      // Mark profile as complete in localStorage
-      auth.setProfileSetupComplete(true);
+      // Keep auth guard state in sync before navigating.
+      setProfileSetupComplete(true);
+      setUserRole(role);
 
       toast({
         title: 'Success',
