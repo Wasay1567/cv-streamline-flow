@@ -9,7 +9,7 @@ export const cvSchema = z.object({
     fatherName: z.string().trim().min(3, "Father's name must be at least 3 characters long"),
     department: z.string().trim().min(2, "Department is required"),
     batch: z.string().trim().min(4, "Batch is required"),
-    cell: z.string().trim().regex(/^03\d{2}-\d{7}$/, "Format: 03XX-XXXXXXX"),
+    cell: z.string().trim().regex(/^03\d{2}\d{7}$/, "Format: 03XXXXXXXXX"),
     rollNo: z.string().trim().toUpperCase().regex(/^[A-Z]{2}-2[0-9]{4}$/, "Format: ME-20001"),
     cnic: z.string().trim().regex(/^\d{5}-\d{7}-\d{1}$/, "Format: 12345-1234567-1"),
     email: z.string().trim()
@@ -19,15 +19,15 @@ export const cvSchema = z.object({
     dob: z.string().trim().min(1, "Date of birth is required").refine((dateString) => {
       const dobDate = new Date(dateString);
       return dobDate < new Date();
-    }, { message: "Date of birth cannot be in the future" }),
-    address: z.string().trim().min(10, "Please provide a complete postal address"),
-  }),
+        }, { message: "Date of birth cannot be in the future" }),
+        address: z.string().trim().min(10, "Please provide a complete postal address"),
+      }),
 
-  academics: z.array(
-    z.object({
+      academics: z.array(
+        z.object({
       degree: z.string().min(1, "Degree is required"),
       university: z.string().min(2, "University/Board name is required"),
-      year: z.string().regex(/^\d{4}$/).refine((y) => parseInt(y) <= currentYear, ), //message remaining
+      year: z.string().regex(/^\d{4}$/, "Year must be 4 digits"),
       gpa: z.string().min(1, "GPA/Percentage is required"),
       majors: z.string().min(2, "Major is Required"),
     })
