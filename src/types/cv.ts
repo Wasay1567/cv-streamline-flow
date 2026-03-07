@@ -20,7 +20,6 @@ export const cvSchema = z.object({
       const dobDate = new Date(dateString);
       return dobDate < new Date();
     }, { message: "Date of birth cannot be in the future" }),
-    
     address: z.string().trim().min(10, "Please provide a complete postal address"),
   }),
 
@@ -147,6 +146,7 @@ export interface CVSubmission {
   student_id: string;
   status: CVStatus;
   cv_data: CVData;
+  student_image: string;
   advisor_comments: string;
   submitted_at: string | null;
   updated_at: string;

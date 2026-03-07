@@ -13,6 +13,7 @@ import { CheckCircle, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
+
 const AdvisorDashboard = () => {
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<CVListItem[]>([]);
@@ -230,9 +231,16 @@ const AdvisorDashboard = () => {
               </div>
               <div className="border-t pt-4">
                 <h3 className="font-semibold mb-2">Full CV Data</h3>
-                <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[400px]">
-                  {JSON.stringify(selectedCVDetails, null, 2)}
-                </pre>
+                <div className="space-y-3">
+                  {Object.entries(selectedCVDetails).map(([key, value]) => (
+                    <div key={key} className="border-b pb-2 last:border-b-0">
+                      <p className="text-xs font-medium text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</p>
+                      <p className="text-sm break-words whitespace-pre-wrap">
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value) || 'N/A'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

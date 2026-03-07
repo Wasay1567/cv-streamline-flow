@@ -82,7 +82,9 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
           {cv.industrialVisits?.length > 0 && (
             <Section title="Industrial Visits">
               <ul className="list-disc pl-5 text-sm space-y-1">
-                {cv.industrialVisits.map((v, i) => <li key={i}>{v}</li>)}
+                {cv.industrialVisits.map((v, i) => <li key={i}>
+                  {v.organization} - ({v.date})
+                </li>)}
               </ul>
             </Section>
           )}

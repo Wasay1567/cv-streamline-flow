@@ -21,26 +21,24 @@ const ProtectedRoute = ({ children, allowedRoles, requireProfileSetup = true }: 
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Check if profile setup is required and not completed
+  // If profile setup is NOT complete, redirect to setup page
   if (requireProfileSetup && !profileSetupComplete) {
     return <Navigate to="/setup-profile" replace />;
   }
 
-  // Check role-based access
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
-    return <Navigate to="/dashboard" replace />;
+  // If allowedRoles is specified, user MUST have a role and it must be in the list
+  if (allowedRoles) {
+    if (!role) {
+      // User has no role - should not happen for authenticated users, go to setup
+      return <Navigate to="/setup-profile" replace />;
+    }
+    if (!allowedRoles.includes(role)) {
+      // User has wrong role for this page
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
-  // Allow setup route for logged-in users without full protection
-  if (!requireProfileSetup) {
-    return <>{children}</>;
-  }
-
-  // Require role if role-based access is specified
-  if (allowedRoles && !role) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
+  // Check passes - render component
   return <>{children}</>;
 };
 

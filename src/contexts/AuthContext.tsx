@@ -34,66 +34,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [profileSetupComplete, setProfileSetupComplete] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        if (!isLoaded) return;
+  // Load auth from Clerk user
+  const loadAuth = async () => {
+    try {
+      if (!isLoaded) return;
 
-        // Check if dev auth is active
-        if (auth.isDevAuthEnabled()) {
-          const devAuth = auth.getStoredDevAuth();
-          if (devAuth) {
-            setUser(devAuth.user);
-            setRole(devAuth.role);
-            setProfileSetupComplete(true);
-            setLoading(false);
-            return;
-          }
+      // Check if dev auth is active
+      if (auth.isDevAuthEnabled()) {
+        const devAuth = auth.getStoredDevAuth();
+        if (devAuth) {
+          setUser(devAuth.user);
+          setRole(devAuth.role);
+          setProfileSetupComplete(true);
+          setLoading(false);
+          return;
         }
+      }
 
-        // Use Clerk user
-        if (clerkUser) {
-          const authUser: AuthUser = {
-            id: clerkUser.id,
-            email: clerkUser.primaryEmailAddress?.emailAddress || '',
-            firstName: clerkUser.firstName || undefined,
-            lastName: clerkUser.lastName || undefined,
-          };
-          setUser(authUser);
+      // Use Clerk user
+      if (clerkUser) {
+        const authUser: AuthUser = {
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress || '',
+          firstName: clerkUser.firstName || undefined,
+          lastName: clerkUser.lastName || undefined,
+        };
+        setUser(authUser);
 
-          // Check if role is stored in Clerk's metadata (after profile setup)
-          const clerkRole = (clerkUser.unsafeMetadata?.role as AppRole) || null;
-          const clerkProfileComplete = clerkUser.unsafeMetadata?.profileSetupComplete === true;
+        // Priority 1: Check Clerk metadata for role (most up-to-date)
+        const clerkRole = (clerkUser.unsafeMetadata?.role as AppRole) || null;
+        const clerkProfileComplete = clerkUser.unsafeMetadata?.profileSetupComplete === true;
 
-          if (clerkRole) {
-            setRole(clerkRole);
-            setProfileSetupComplete(true);
-          } else {
-            // Fallback: fetch role from backend if not in Clerk metadata
+        if (clerkRole) {
+          setRole(clerkRole);
+          setProfileSetupComplete(true);
+        } else {
+          // Priority 2: Fetch role from backend if not in Clerk metadata
+          try {
             const token = await session?.getToken();
             const fetchedRole = await auth.getUserRole(clerkUser.id, token || undefined);
-            setRole(fetchedRole);
+            if (fetchedRole) {
+              setRole(fetchedRole);
+              setProfileSetupComplete(true);
+            }
+          } catch (error) {
+            console.warn('Could not fetch role from backend:', error);
+          }
 
-            // Check if profile setup is complete (stored locally as backup)
+          // Fallback to localStorage (only if no backend role)
+          if (!role) {
             const profileComplete = auth.isProfileSetupComplete();
             setProfileSetupComplete(profileComplete || clerkProfileComplete);
           }
-        } else {
-          setUser(null);
-          setRole(null);
-          setProfileSetupComplete(false);
         }
-      } catch (error) {
-        console.error('Auth load error:', error);
+      } else {
         setUser(null);
         setRole(null);
         setProfileSetupComplete(false);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Auth load error:', error);
+      setUser(null);
+      setRole(null);
+      setProfileSetupComplete(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadAuth();
   }, [clerkUser, isLoaded, session]);
 
   const signOut = async () => {
