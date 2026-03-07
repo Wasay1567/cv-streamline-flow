@@ -19,15 +19,15 @@ export const cvSchema = z.object({
     dob: z.string().trim().min(1, "Date of birth is required").refine((dateString) => {
       const dobDate = new Date(dateString);
       return dobDate < new Date();
-    }, { message: "Date of birth cannot be in the future" }),
-    address: z.string().trim().min(10, "Please provide a complete postal address"),
-  }),
+        }, { message: "Date of birth cannot be in the future" }),
+        address: z.string().trim().min(10, "Please provide a complete postal address"),
+      }),
 
-  academics: z.array(
-    z.object({
+      academics: z.array(
+        z.object({
       degree: z.string().min(1, "Degree is required"),
       university: z.string().min(2, "University/Board name is required"),
-      year: z.string().regex(/^\d{4}$/).refine((y) => parseInt(y) <= currentYear, ), //message remaining
+      year: z.string().regex(/^\d{4}$/, "Year must be 4 digits"),
       gpa: z.string().min(1, "GPA/Percentage is required"),
       majors: z.string().min(2, "Major is Required"),
     })
