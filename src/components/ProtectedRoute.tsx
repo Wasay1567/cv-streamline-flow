@@ -21,8 +21,8 @@ const ProtectedRoute = ({ children, allowedRoles, requireProfileSetup = true }: 
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // If profile setup is NOT complete, redirect to setup page
-  if (requireProfileSetup && !profileSetupComplete) {
+  // DIL admins do not go through setup-profile.
+  if (requireProfileSetup && !profileSetupComplete && role !== 'dil_admin') {
     return <Navigate to="/setup-profile" replace />;
   }
 

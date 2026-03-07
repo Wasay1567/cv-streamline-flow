@@ -19,10 +19,13 @@ const Dashboard = () => {
 
   return (
     <AppLayout>
-      {role === 'student' && <StudentDashboard />}
-      {role === 'advisor' && <AdvisorDashboard />}
-      {role === 'dil_admin' && <AdminDashboard />}
-      {!role && (
+      {role === 'student' ? (
+        <StudentDashboard />
+      ) : role === 'advisor' ? (
+        <AdvisorDashboard />
+      ) : role === 'dil_admin' ? (
+        <AdminDashboard />
+      ) : (
         <div className="text-center py-12 space-y-2">
           <p className="text-muted-foreground font-medium">Your account is pending approval</p>
           <p className="text-sm text-muted-foreground">The DIL admin will approve your account shortly. Please check back later.</p>

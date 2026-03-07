@@ -52,9 +52,9 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [subs, rls, advisors] = await Promise.all([
+      const [subs, advisors] = await Promise.all([
         backend.listCVs(),
-        backend.listUserRoles(),
+        // backend.listUserRoles(),
         backend.getPendingAdvisors(),
       ]);
       // Format CVListItem data for the admin dashboard
@@ -73,7 +73,7 @@ const AdminDashboard = () => {
         : [];
       
       setSubmissions(formattedSubs);
-      setRoles(Array.isArray(rls) ? rls : []);
+      // setRoles(Array.isArray(rls) ? rls : []);
       setPendingAdvisors(Array.isArray(advisors) ? advisors : []);
       setProfiles([]); // No longer available from API
     } catch (error) {
@@ -102,6 +102,16 @@ const AdminDashboard = () => {
       fetchData();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to approve CV';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    }
+  };
+
+  const handleViewCV = async (cvId: string) => {
+    try {
+      const details = await backend.getCV(cvId);
+      setSelectedCV(details);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load CV details';
       toast({ title: 'Error', description: message, variant: 'destructive' });
     }
   };
@@ -364,7 +374,7 @@ const AdminDashboard = () => {
                         <TableCell className="font-semibold">{cv?.academics?.[0]?.gpa || '—'}</TableCell>
                         <TableCell>{cv?.internships?.length || 0}</TableCell>
                         <TableCell className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setSelectedCV(sub)}>View</Button>
+                          <Button size="sm" variant="outline" onClick={() => handleViewCV(sub.id)}>View</Button>
                           {sub.status === 'pending_dil' && (
                             <Button size="sm" className="gap-1" onClick={() => handleFinalApprove(sub.id)}>
                               <CheckCircle className="h-3 w-3" /> Approve
@@ -401,7 +411,7 @@ const AdminDashboard = () => {
                       <TableCell>{profile?.department}</TableCell>
                       <TableCell><StatusBadge status={sub.status as CVStatus} /></TableCell>
                       <TableCell className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setSelectedCV(sub)}>View</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleViewCV(sub.id)}>View</Button>
                         <Button size="sm" className="gap-1" onClick={() => handleFinalApprove(sub.id)}>
                           <CheckCircle className="h-3 w-3" /> Final Approve
                         </Button>
@@ -501,7 +511,7 @@ const AdminDashboard = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
+                        <TableHead>S.no</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead>Applied On</TableHead>
@@ -509,12 +519,14 @@ const AdminDashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pendingAdvisors.map((advisor) => (
-                        <TableRow key={advisor.advisor_id}>
-                          <TableCell className="font-medium">{advisor.name}</TableCell>
+                      {pendingAdvisors.map((advisor, idx) => (
+                        <TableRow key={advisor.advisor_id || idx}>
+                          <TableCell className="font-medium">{idx+1}</TableCell>
                           <TableCell>{advisor.email}</TableCell>
                           <TableCell>{advisor.department}</TableCell>
-                          <TableCell>{new Date(advisor.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                              {advisor.createdAt ? new Date(advisor.created_at).toLocaleDateString() : "-"}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-2 justify-end">
                               <Button

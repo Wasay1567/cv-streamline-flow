@@ -8,7 +8,7 @@ interface Props {
 
 const CVViewDialog = ({ submission, onClose }: Props) => {
   if (!submission) return null;
-  const cv = submission.cv_data as CVData;
+  const cv = (submission.cv_data ?? {}) as Partial<CVData>;
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div className="space-y-2">
@@ -30,17 +30,17 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
         <DialogHeader><DialogTitle>CV Details</DialogTitle></DialogHeader>
         <div className="space-y-6">
           <Section title="Personal Information">
-            <Field label="Name" value={cv.personalInfo?.name} />
-            <Field label="Father's Name" value={cv.personalInfo?.fatherName} />
-            <Field label="Department" value={cv.personalInfo?.department} />
-            <Field label="Batch" value={cv.personalInfo?.batch} />
-            <Field label="Roll No" value={cv.personalInfo?.rollNo} />
-            <Field label="CNIC" value={cv.personalInfo?.cnic} />
-            <Field label="Email" value={cv.personalInfo?.email} />
-            <Field label="Cell" value={cv.personalInfo?.cell} />
-            <Field label="Gender" value={cv.personalInfo?.gender} />
-            <Field label="Date of Birth" value={cv.personalInfo?.dob} />
-            <Field label="Address" value={cv.personalInfo?.address} />
+            <Field label="Name" value={cv?.personalInfo?.name || ''} />
+            <Field label="Father's Name" value={cv?.personalInfo?.fatherName || ''} />
+            <Field label="Department" value={cv?.personalInfo?.department || ''} />
+            <Field label="Batch" value={cv?.personalInfo?.batch || ''} />
+            <Field label="Roll No" value={cv?.personalInfo?.rollNo || ''} />
+            <Field label="CNIC" value={cv?.personalInfo?.cnic || ''} />
+            <Field label="Email" value={cv?.personalInfo?.email || ''} />
+            <Field label="Cell" value={cv?.personalInfo?.cell || ''} />
+            <Field label="Gender" value={cv?.personalInfo?.gender || ''} />
+            <Field label="Date of Birth" value={cv?.personalInfo?.dob || ''} />
+            <Field label="Address" value={cv?.personalInfo?.address || ''} />
           </Section>
 
           <Section title="Academics">
@@ -56,13 +56,13 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
           </Section>
 
           <Section title="FYP Details">
-            <Field label="Title" value={cv.fyp?.title} />
-            <Field label="Company" value={cv.fyp?.company} />
-            <Field label="Objectives" value={cv.fyp?.objectives} />
+            <Field label="Title" value={cv?.fyp?.title || ''} />
+            <Field label="Company" value={cv?.fyp?.company || ''} />
+            <Field label="Objectives" value={cv?.fyp?.objectives || ''} />
           </Section>
 
           <Section title="Career Counseling">
-            <p className="text-sm">{cv.careerCounseling ? 'Yes' : 'No'}</p>
+            <p className="text-sm">{cv?.careerCounseling === undefined ? '—' : (cv.careerCounseling ? 'Yes' : 'No')}</p>
           </Section>
 
           {cv.internships?.length > 0 && (

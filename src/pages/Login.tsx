@@ -9,26 +9,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 const Login = () => {
   const { isLoaded } = useUser();
-  const { user, loading, profileSetupComplete } = useAuth();
+  const { user, role, loading, profileSetupComplete } = useAuth();
   const navigate = useNavigate();
   const devAuthEnabled = auth.isDevAuthEnabled();
 
   useEffect(() => {
     if (!loading && user) {
-      if (!profileSetupComplete) {
+      if (!profileSetupComplete && role !== 'dil_admin') {
         navigate('/setup-profile');
       } else {
         navigate('/dashboard');
       }
     }
-  }, [user, loading, profileSetupComplete, navigate]);
+  }, [user, role, loading, profileSetupComplete, navigate]);
 
   if (loading || !isLoaded) return null;
   if (user) return <Navigate to="/dashboard" replace />;
 
   const handleDevLogin = (role: 'student' | 'advisor' | 'dil_admin') => {
     auth.signInAsDevRole(role);
-    window.location.assign('/setup-profile');
+    window.location.assign(role === 'dil_admin' ? '/dashboard' : '/setup-profile');
   };
 
   return (
@@ -44,7 +44,7 @@ const Login = () => {
                 card: 'rounded-lg border border-input bg-card shadow-sm',
               },
             }}
-            redirectUrl="/setup-profile"
+            redirectUrl="/dashboard"
           />
         </div>
 
@@ -88,3 +88,4 @@ const Login = () => {
 };
 
 export default Login;
+

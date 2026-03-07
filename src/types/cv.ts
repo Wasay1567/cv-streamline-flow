@@ -9,7 +9,7 @@ export const cvSchema = z.object({
     fatherName: z.string().trim().min(3, "Father's name must be at least 3 characters long"),
     department: z.string().trim().min(2, "Department is required"),
     batch: z.string().trim().min(4, "Batch is required"),
-    cell: z.string().trim().regex(/^03\d{2}-\d{7}$/, "Format: 03XX-XXXXXXX"),
+    cell: z.string().trim().regex(/^03\d{2}\d{7}$/, "Format: 03XXXXXXXXX"),
     rollNo: z.string().trim().toUpperCase().regex(/^[A-Z]{2}-2[0-9]{4}$/, "Format: ME-20001"),
     cnic: z.string().trim().regex(/^\d{5}-\d{7}-\d{1}$/, "Format: 12345-1234567-1"),
     email: z.string().trim()

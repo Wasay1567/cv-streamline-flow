@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,7 +24,7 @@ const roles = [
 export default function SetupUserProfile() {
   const { user, isLoaded } = useUser();
   const { session } = useClerk();
-  const { setProfileSetupComplete, setUserRole } = useAuth();
+  const { role: authRole, loading: authLoading, profileSetupComplete, setProfileSetupComplete, setUserRole } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [department, setDepartment] = useState('');
@@ -33,12 +33,9 @@ export default function SetupUserProfile() {
 
   const { signOut } = useClerk();
 
-  if (!isLoaded) return null;
-
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
+  if (!isLoaded || authLoading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (profileSetupComplete || authRole === 'dil_admin') return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,3 +168,4 @@ export default function SetupUserProfile() {
     </div>
   );
 }
+

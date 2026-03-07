@@ -9,12 +9,16 @@ import type { CVSubmission, CVStatus } from '@/types/cv';
 import { FileText, Edit } from 'lucide-react';
 
 const StudentDashboard = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [submission, setSubmission] = useState<CVSubmission | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    // Only fetch if user is a student
+    if (!user || role !== 'student') {
+      setLoading(false);
+      return;
+    }
     backend
       .getMySubmission()
       .then((data) => {
@@ -23,7 +27,7 @@ const StudentDashboard = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, [user]);
+  }, [user, role]);
 
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>;
 

@@ -50,8 +50,8 @@ export const backend = {
     return api.post("/user/sync", payload);
   },
 
-  getUserProfile() {
-    return api.get<Profile>("/profiles");
+  getUserProfile(token?: string) {
+    return api.get<Profile>("/profiles", token ? { token } : undefined);
   },
 
   // CV endpoints
@@ -138,4 +138,3 @@ export const backend = {
     return api.post<BulkNotifyResult>("/notifications/bulk", payload);
   },
 };
-

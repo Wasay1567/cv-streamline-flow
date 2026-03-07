@@ -74,9 +74,22 @@ const CVForm = () => {
   const [saving, setSaving] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [studentImage, setStudentImage] = useState<string>('');
+  const [dbUserId, setDbUserId] = useState<string>('');
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    // Fetch user's database ID from profile endpoint
+    backend.getUserProfile().then((profile) => {
+      if (profile && profile.id) {
+        setDbUserId(profile.id);
+      }
+    }).catch((error) => {
+      console.error('Error fetching user profile:', error);
+    });
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -233,9 +246,8 @@ const CVForm = () => {
           if (!base64String) {
             throw new Error('Failed to convert image to base64');
           }
-          
-          // Prepare filename with student UUID
-          const fileName = `${user.id}-${file.name}`;
+          // Prepare filename with database UUID (not Clerk UUID)
+          const fileName = `${dbUserId || user.id}`;
 
           // Send to Google Apps Script
           const response = await fetch(import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL, {

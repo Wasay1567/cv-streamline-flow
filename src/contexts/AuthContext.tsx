@@ -26,6 +26,17 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const normalizeRole = (value: unknown): AppRole | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'student') return 'student';
+  if (normalized === 'advisor') return 'advisor';
+  if (normalized === 'dil_admin' || normalized === 'dil-admin' || normalized === 'dil admin' || normalized === 'diladmin' || normalized === 'admin') {
+    return 'dil_admin';
+  }
+  return null;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user: clerkUser, isLoaded } = useUser();
   const { signOut: clerkSignOut, session } = useClerk();
@@ -61,38 +72,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setUser(authUser);
 
-        // Get role from Clerk metadata (fast, immediate)
-        const clerkRole = (clerkUser.unsafeMetadata?.role as AppRole) || null;
+        // Get role/setup hints from Clerk metadata (fallback only)
+        const clerkRole = normalizeRole(clerkUser.unsafeMetadata?.role);
         const clerkProfileComplete = clerkUser.unsafeMetadata?.profileSetupComplete === true;
+        const localProfileComplete = auth.isProfileSetupComplete();
 
-        // Set role immediately from Clerk metadata if available
-        if (clerkRole) {
-          setRole(clerkRole);
-          setProfileSetupComplete(true);
-        } else {
-          // No role in Clerk, check localStorage as fallback
-          const profileComplete = auth.isProfileSetupComplete();
-          setProfileSetupComplete(profileComplete || clerkProfileComplete);
-        }
-
-        // Fetch from database in background to get authoritative role (may have been updated by admin)
-        const fetchProfileFromDatabase = async () => {
-          try {
-            const { backend } = await import('@/integrations/api/backend');
-            const userProfile = await backend.getUserProfile();
-            if (userProfile && userProfile.role) {
-              console.log('Updated role from database:', userProfile.role);
-              setRole(userProfile.role as AppRole);
-              setProfileSetupComplete(true);
-            }
-          } catch (error) {
-            console.warn('Could not fetch user profile from database:', error);
-            // Keep using Clerk role if database fetch fails
+        // Resolve authoritative role before leaving loading state to avoid mounting the wrong dashboard.
+        try {
+          const { backend } = await import('@/integrations/api/backend');
+          const token = await session?.getToken();
+          const userProfile = await backend.getUserProfile(token || undefined);
+          if (userProfile) {
+            // Some backends omit role on /profiles; use Clerk role as fallback.
+            const profileRole = normalizeRole(userProfile.role);
+            setRole(profileRole || clerkRole);
+            // A resolved profile means setup is complete for student/advisor flows.
+            setProfileSetupComplete(true);
+          } else {
+            setRole(clerkRole);
+            setProfileSetupComplete(localProfileComplete || clerkProfileComplete || !!clerkRole);
           }
-        };
-        
-        // Call database fetch without awaiting (background update)
-        fetchProfileFromDatabase();
+        } catch (error) {
+          console.warn('Could not fetch user profile from database; falling back to Clerk metadata:', error);
+          setRole(clerkRole);
+          setProfileSetupComplete(localProfileComplete || clerkProfileComplete || !!clerkRole);
+        }
       } else {
         setUser(null);
         setRole(null);
@@ -150,4 +154,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
