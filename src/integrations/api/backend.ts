@@ -51,7 +51,7 @@ export const backend = {
   },
 
   getUserProfile() {
-    return api.get<Profile>("/profiles/me");
+    return api.get<Profile>("/profiles");
   },
 
   // CV endpoints
