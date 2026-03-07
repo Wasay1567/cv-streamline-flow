@@ -61,32 +61,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setUser(authUser);
 
-        // Priority 1: Check Clerk metadata for role (most up-to-date)
+        // Get role from Clerk metadata (fast, immediate)
         const clerkRole = (clerkUser.unsafeMetadata?.role as AppRole) || null;
         const clerkProfileComplete = clerkUser.unsafeMetadata?.profileSetupComplete === true;
 
+        // Set role immediately from Clerk metadata if available
         if (clerkRole) {
           setRole(clerkRole);
           setProfileSetupComplete(true);
         } else {
-          // Priority 2: Fetch role from backend if not in Clerk metadata
+          // No role in Clerk, check localStorage as fallback
+          const profileComplete = auth.isProfileSetupComplete();
+          setProfileSetupComplete(profileComplete || clerkProfileComplete);
+        }
+
+        // Fetch from database in background to get authoritative role (may have been updated by admin)
+        const fetchProfileFromDatabase = async () => {
           try {
-            const token = await session?.getToken();
-            const fetchedRole = await auth.getUserRole(clerkUser.id, token || undefined);
-            if (fetchedRole) {
-              setRole(fetchedRole);
+            const { backend } = await import('@/integrations/api/backend');
+            const userProfile = await backend.getUserProfile();
+            if (userProfile && userProfile.role) {
+              console.log('Updated role from database:', userProfile.role);
+              setRole(userProfile.role as AppRole);
               setProfileSetupComplete(true);
             }
           } catch (error) {
-            console.warn('Could not fetch role from backend:', error);
+            console.warn('Could not fetch user profile from database:', error);
+            // Keep using Clerk role if database fetch fails
           }
-
-          // Fallback to localStorage (only if no backend role)
-          if (!role) {
-            const profileComplete = auth.isProfileSetupComplete();
-            setProfileSetupComplete(profileComplete || clerkProfileComplete);
-          }
-        }
+        };
+        
+        // Call database fetch without awaiting (background update)
+        fetchProfileFromDatabase();
       } else {
         setUser(null);
         setRole(null);

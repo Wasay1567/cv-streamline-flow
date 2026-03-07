@@ -50,6 +50,10 @@ export const backend = {
     return api.post("/user/sync", payload);
   },
 
+  getUserProfile() {
+    return api.get<Profile>("/profiles/me");
+  },
+
   // CV endpoints
   createCV(payload: { cv_data: CVData; student_image: string }) {
     return api.post<CVSubmission>("/cv-submissions", payload);

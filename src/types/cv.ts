@@ -139,6 +139,7 @@ export interface Profile {
   full_name: string;
   department: string;
   batch: string;
+  role?: AppRole;
 }
 
 export interface CVSubmission {

@@ -74,6 +74,8 @@ const AdvisorDashboard = () => {
     }
   };
 
+  // backend.getUserProfile();
+
   const handleReject = async () => {
     if (!rejectId) return;
     try {
