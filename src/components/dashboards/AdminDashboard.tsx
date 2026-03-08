@@ -532,7 +532,7 @@ const AdminDashboard = () => {
                               <Button
                                 size="sm"
                                 variant="default"
-                                onClick={() => handleApproveAdvisor(advisor.advisor_id)}
+                                onClick={() => handleApproveAdvisor(advisor.id)}
                                 className="gap-1"
                               >
                                 <CheckCircle className="h-4 w-4" /> Approve
@@ -540,7 +540,7 @@ const AdminDashboard = () => {
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => handleRejectAdvisor(advisor.advisor_id)}
+                                onClick={() => handleRejectAdvisor(advisor.id)}
                                 className="gap-1"
                               >
                                 <X className="h-4 w-4" /> Reject

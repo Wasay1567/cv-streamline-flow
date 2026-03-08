@@ -4,6 +4,7 @@ const currentYear = new Date().getFullYear();
 const monthYearRegex = /^(0[1-9]|1[0-2])\/\d{4}$/;
 
 export const cvSchema = z.object({
+  student_image: z.string().trim(),
   personalInfo: z.object({
     name: z.string().trim().min(3, "Name must be at least 3 characters long"),
     fatherName: z.string().trim().min(3, "Father's name must be at least 3 characters long"),
@@ -131,7 +132,7 @@ export type CVData = z.infer<typeof cvSchema>;
 // }
 
 export type AppRole = 'student' | 'advisor' | 'dil_admin';
-export type CVStatus = 'not_submitted' | 'pending_advisor' | 'pending_dil' | 'approved' | 'rejected';
+export type CVStatus = 'not_submitted' | 'pending_advisor' | 'pending_dil' | 'approved' | 'rejected' | 'draft';
 
 export interface Profile {
   id: string;
@@ -147,8 +148,7 @@ export interface CVSubmission {
   student_id: string;
   status: CVStatus;
   cv_data: CVData;
-  student_image: string;
-  advisor_comments: string;
+  rejection_comment: string;
   submitted_at: string | null;
   updated_at: string;
 }
@@ -198,6 +198,7 @@ export const DEPARTMENTS = [
 export const BATCHES = Array.from({ length: 4 }, (_, i) => (currentYear - i-1).toString());
 
 export const emptyCVData: CVData = {
+  student_image: '',
   personalInfo: {
     name: '',
     fatherName: '',

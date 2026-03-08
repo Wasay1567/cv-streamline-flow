@@ -73,11 +73,107 @@ const CVForm = () => {
   const [existingId, setExistingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
-  const [studentImage, setStudentImage] = useState<string>('');
   const [dbUserId, setDbUserId] = useState<string>('');
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const asSubmission = (value: unknown): CVSubmission | null => {
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Record<string, unknown>;
+    const rawCvData = (candidate.cv_data ?? candidate.cvData) as Partial<CVData> | undefined;
+    if (!rawCvData) return null;
+
+    return {
+      ...(candidate as unknown as CVSubmission),
+      id: String(candidate.id ?? candidate.cv_id ?? candidate.cvId ?? ''),
+      cv_data: rawCvData as CVData,
+      submitted_at: (candidate.submitted_at ?? candidate.submittedAt ?? null) as string | null,
+      updated_at: String(candidate.updated_at ?? candidate.updatedAt ?? ''),
+    };
+  };
+
+  const getSubmissionId = (value: unknown): string | null => {
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Record<string, unknown>;
+    const id = candidate.id ?? candidate.cv_id ?? candidate.cvId;
+    return typeof id === 'string' && id ? id : null;
+  };
+
+  const getSubmissionUpdatedAt = (value: unknown): number => {
+    if (!value || typeof value !== 'object') return 0;
+    const candidate = value as Record<string, unknown>;
+    const raw = candidate.updated_at ?? candidate.updatedAt ?? candidate.created_at ?? candidate.createdAt ?? 0;
+    return new Date(String(raw)).getTime() || 0;
+  };
+
+  const pickLatestId = (payload: unknown): string | null => {
+    if (Array.isArray(payload)) {
+      const sorted = [...payload].sort((a, b) => getSubmissionUpdatedAt(b) - getSubmissionUpdatedAt(a));
+      for (const item of sorted) {
+        const id = getSubmissionId(item);
+        if (id) return id;
+      }
+      return null;
+    }
+    if (payload && typeof payload === 'object') {
+      const wrapped = payload as Record<string, unknown>;
+      return (
+        pickLatestId(wrapped.data) ||
+        pickLatestId(wrapped.submissions) ||
+        pickLatestId(wrapped.results) ||
+        getSubmissionId(payload)
+      );
+    }
+    return null;
+  };
+
+  const pickLatestSubmission = (payload: unknown): CVSubmission | null => {
+    if (Array.isArray(payload)) {
+      const list = payload.map(asSubmission).filter(Boolean) as CVSubmission[];
+      if (list.length === 0) return null;
+      return [...list].sort((a, b) => {
+        const at = new Date(a.updated_at || a.submitted_at || 0).getTime();
+        const bt = new Date(b.updated_at || b.submitted_at || 0).getTime();
+        return bt - at;
+      })[0];
+    }
+
+    const direct = asSubmission(payload);
+    if (direct) return direct;
+
+    if (payload && typeof payload === 'object') {
+      const wrapped = payload as Record<string, unknown>;
+      // Common API wrapper patterns: { data: [...] }, { submissions: [...] }, { results: [...] }
+      return (
+        pickLatestSubmission(wrapped.data) ||
+        pickLatestSubmission(wrapped.submissions) ||
+        pickLatestSubmission(wrapped.results) ||
+        null
+      );
+    }
+
+    return null;
+  };
+
+  const hydrateCVData = (data?: Partial<CVData> | null): CVData => {
+    if (!data) return emptyCVData;
+    return {
+      ...emptyCVData,
+      ...data,
+      student_image: data.student_image || '',
+      personalInfo: { ...emptyCVData.personalInfo, ...(data.personalInfo || {}) },
+      academics: Array.isArray(data.academics) && data.academics.length > 0 ? data.academics : emptyCVData.academics,
+      fyp: { ...emptyCVData.fyp, ...(data.fyp || {}) },
+      internships: Array.isArray(data.internships) ? data.internships : emptyCVData.internships,
+      industrialVisits: Array.isArray(data.industrialVisits) ? data.industrialVisits : emptyCVData.industrialVisits,
+      certificates: Array.isArray(data.certificates) ? data.certificates : emptyCVData.certificates,
+      achievements: Array.isArray(data.achievements) ? data.achievements : emptyCVData.achievements,
+      skills: Array.isArray(data.skills) ? data.skills : emptyCVData.skills,
+      extraCurricular: Array.isArray(data.extraCurricular) ? data.extraCurricular : emptyCVData.extraCurricular,
+      references: Array.isArray(data.references) && data.references.length > 0 ? data.references : emptyCVData.references,
+    };
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -93,21 +189,44 @@ const CVForm = () => {
 
   useEffect(() => {
     if (!user) return;
-    backend.getMySubmission().then((data) => {
-      if (data) {
-        setExistingId(data.id);
+    const loadExistingCV = async () => {
+      try {
+        let latest: CVSubmission | null = null;
+        let latestId: string | null = null;
+
         try {
-          const submissionData = (data as unknown as CVSubmission).cv_data as CVData;
-          if (submissionData && submissionData.personalInfo) {
-            setCvData(submissionData);
-          }
+          const all = await backend.getMyCVs();
+          latest = pickLatestSubmission(all);
+          latestId = pickLatestId(all);
         } catch (error) {
-          console.error('Error loading existing submission:', error);
+          console.warn('Could not fetch CV list from /cv-submissions/me:', error);
         }
+
+        if (!latest) {
+          const single = await backend.getMySubmission();
+          latest = pickLatestSubmission(single);
+          latestId = latestId || pickLatestId(single);
+        }
+
+        // /cv-submissions/me currently returns flattened summary rows; fetch full CV by id.
+        if (!latest && latestId) {
+          try {
+            latest = await backend.getCV(latestId);
+          } catch (error) {
+            console.warn(`Could not fetch CV details for ${latestId}:`, error);
+          }
+        }
+
+        if (!latest) return;
+
+        setExistingId(latest.id || null);
+        setCvData(hydrateCVData((latest.cv_data || {}) as Partial<CVData>));
+      } catch (error) {
+        console.error('Error fetching existing submission:', error);
       }
-    }).catch((error) => {
-      console.error('Error fetching existing submission:', error);
-    });
+    };
+
+    loadExistingCV();
   }, [user]);
 
 
@@ -269,8 +388,8 @@ const CVForm = () => {
             throw new Error(result?.error || 'Failed to upload image to Drive');
           }
 
-          // Store the photo URL separately as student_image
-          setStudentImage(result.fileUrl);
+          // Store uploaded photo URL inside cv_data.student_image
+          setCvData(prev => ({ ...prev, student_image: result.fileUrl }));
 
           toast({ title: 'Success', description: 'Photo uploaded successfully' });
           setImageUploading(false);
@@ -320,9 +439,9 @@ const CVForm = () => {
 
   const submitCV = async () => {
     if (!user) return;
-    
+    console.log(cvData)
     // Validate photo is uploaded
-    if (!studentImage) {
+    if (!cvData.student_image) {
       toast({ title: 'Error', description: 'Please upload a photo to continue', variant: 'destructive' });
       return;
     }
@@ -331,8 +450,7 @@ const CVForm = () => {
     try {
       // Call backend POST /cv-submissions/ endpoint with both CV data and image
       await backend.createCV({
-        cv_data: cvData,
-        student_image: studentImage,
+        cv_data: cvData
       });
       toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
       navigate('/dashboard');
@@ -451,8 +569,8 @@ const CVForm = () => {
                 <div className="space-y-3 border rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <Label>Photo *</Label>
-                    {studentImage && (
-                      <span className="text-xs text-green-600">✓ Uploaded</span>
+                    {cvData.student_image && (
+                      <span className="text-xs text-green-600">Uploaded</span>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">Upload a clear passport-style photo (JPEG/PNG, max 5MB)</p>
@@ -479,17 +597,17 @@ const CVForm = () => {
                     >
                       {imageUploading ? 'Uploading...' : 'Select Photo'}
                     </Button>
-                    {/* {studentImage && (
+                    {/* {cvData.student_image && (
                       <div className="flex items-center gap-2">
                         <img
-                          src={studentImage}
+                          src={cvData.student_image}
                           alt="Preview"
                           className="h-24 w-24 object-cover rounded border"
                         />
                       </div>
                     )} */}
                   </div>
-                  {!studentImage && <p className="text-xs text-destructive">Photo is required</p>}
+                  {!cvData.student_image && <p className="text-xs text-destructive">Photo is required</p>}
                 </div>
               </>
             )}
@@ -786,7 +904,7 @@ const CVForm = () => {
               ) : (
                 <Button 
                   onClick={submitCV} 
-                  disabled={saving || !isFormValid || !studentImage}
+                  disabled={saving || !isFormValid || !cvData.student_image}
                   className="gap-1"
                 >
                   <Send className="h-4 w-4" /> {saving ? 'Submitting...' : 'Submit CV'}
@@ -795,9 +913,9 @@ const CVForm = () => {
             </div>
 
             {/* The Helper Text - Only shows on the final step if form is invalid or photo not uploaded */}
-            {step === STEPS.length - 1 && (!isFormValid || !studentImage) && (
+            {step === STEPS.length - 1 && (!isFormValid || !cvData.student_image) && (
               <span className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
-                {!studentImage ? '*Please upload a photo to submit' : '*Please fill all required fields to submit'}
+                {!cvData.student_image ? '*Please upload a photo to submit' : '*Please fill all required fields to submit'}
               </span>
             )}
           </div>
@@ -808,3 +926,66 @@ const CVForm = () => {
 };
 
 export default CVForm;
+
+
+/**
+ * {
+    "student_image": "https://drive.google.com/file/d/1kvQuJZ3uRgsGL1xupMXx4l8Fm6aB_ioz/view?usp=drivesdk",
+    "personalInfo": {
+        "name": "Wasay",
+        "fatherName": "Fatherrrr",
+        "department": "Department of Civil Engineering",
+        "batch": "2023",
+        "cell": "03001234567",
+        "rollNo": "CE-23011",
+        "cnic": "12345-1234567-1",
+        "email": "soomro4601356@cloud.neduet.edu.pk",
+        "gender": "Male",
+        "dob": "2005-01-04",
+        "address": "Gulshan e iqbal, Karachi"
+    },
+    "academics": [
+        {
+            "degree": "BE",
+            "university": "NEDUET",
+            "year": "2026",
+            "gpa": "3.5",
+            "majors": "Civil Engineering"
+        },
+        {
+            "degree": "HSC",
+            "university": "Karachi board",
+            "year": "2022",
+            "gpa": "77%",
+            "majors": "Pre-engineering"
+        },
+        {
+            "degree": "SSC",
+            "university": "Karachi board",
+            "year": "2020",
+            "gpa": "85%",
+            "majors": "Science"
+        }
+    ],
+    "fyp": {
+        "title": "Building Making",
+        "company": "Wasay Builders",
+        "objectives": "to learn how buildings are built"
+    },
+    "careerCounseling": false,
+    "internships": [],
+    "industrialVisits": [],
+    "certificates": [],
+    "achievements": [],
+    "skills": [],
+    "extraCurricular": [],
+    "references": [
+        {
+            "name": "",
+            "contact": "",
+            "occupation": "",
+            "relation": ""
+        }
+    ]
+}
+ */

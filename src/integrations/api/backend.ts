@@ -55,7 +55,7 @@ export const backend = {
   },
 
   // CV endpoints
-  createCV(payload: { cv_data: CVData; student_image: string }) {
+  createCV(payload: { cv_data: CVData }) {
     return api.post<CVSubmission>("/cv-submissions", payload);
   },
 

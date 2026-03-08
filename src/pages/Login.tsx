@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { SignIn, useUser } from '@clerk/clerk-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/integrations/api/auth';
@@ -10,21 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 const Login = () => {
   const { isLoaded } = useUser();
   const { user, role, loading, profileSetupComplete } = useAuth();
-  const navigate = useNavigate();
   const devAuthEnabled = auth.isDevAuthEnabled();
 
-  useEffect(() => {
-    if (!loading && user) {
-      if (!profileSetupComplete && role !== 'dil_admin') {
-        navigate('/setup-profile');
-      } else {
-        navigate('/dashboard');
-      }
-    }
-  }, [user, role, loading, profileSetupComplete, navigate]);
-
   if (loading || !isLoaded) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) {
+    const nextPath = !profileSetupComplete && role !== 'dil_admin' ? '/setup-profile' : '/dashboard';
+    return <Navigate to={nextPath} replace />;
+  }
 
   const handleDevLogin = (role: 'student' | 'advisor' | 'dil_admin') => {
     auth.signInAsDevRole(role);

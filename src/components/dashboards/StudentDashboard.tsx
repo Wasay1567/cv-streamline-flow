@@ -6,13 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge';
 import type { CVSubmission, CVStatus } from '@/types/cv';
-import { FileText, Edit } from 'lucide-react';
+import { FileText, Edit, Divide } from 'lucide-react';
 
 const StudentDashboard = () => {
   const { user, role } = useAuth();
   const [submission, setSubmission] = useState<CVSubmission | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // console.log(submission[0]?.status)
+  // console.log(submission)
   useEffect(() => {
     // Only fetch if user is a student
     if (!user || role !== 'student') {
@@ -48,12 +50,13 @@ const StudentDashboard = () => {
             <CardDescription>Current status of your CV</CardDescription>
           </CardHeader>
           <CardContent>
+
             {submission ? (
               <div className="space-y-3">
-                <StatusBadge status={submission.status as CVStatus} />
-                {submission.submitted_at && (
+                <StatusBadge status={submission[0]?.status as CVStatus} />
+                {submission[0]?.submitted_at && (
                   <p className="text-sm text-muted-foreground">
-                    Submitted: {new Date(submission.submitted_at).toLocaleDateString()}
+                    Submitted: {new Date(submission[0]?.submitted_at).toLocaleDateString()}
                   </p>
                 )}
               </div>
@@ -62,14 +65,13 @@ const StudentDashboard = () => {
             )}
           </CardContent>
         </Card>
-
-        {submission?.status === 'rejected' && submission.advisor_comments && (
+        {submission[0]?.status === 'rejected' && submission[0]?.rejection_comment && (
           <Card className="border-destructive/50">
             <CardHeader>
               <CardTitle className="text-destructive">Advisor Feedback</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">{submission.advisor_comments}</p>
+              <p className="text-sm">{submission[0]?.rejection_comment}</p>
             </CardContent>
           </Card>
         )}

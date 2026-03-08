@@ -48,8 +48,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load auth from Clerk user
   const loadAuth = async () => {
     try {
-      if (!isLoaded) return;
-
       // Check if dev auth is active
       if (auth.isDevAuthEnabled()) {
         const devAuth = auth.getStoredDevAuth();
@@ -113,6 +111,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    if (!isLoaded) {
+      setLoading(true);
+      return;
+    }
     loadAuth();
   }, [clerkUser, isLoaded, session]);
 
