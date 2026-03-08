@@ -14,7 +14,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     { to: '/admin', label: 'Admin', icon: Shield, roles: ['dil_admin'] },
   ];
 
-  const filtered = navItems.filter(item => role && item.roles.includes(role));
+  const filtered = navItems.filter((item) => {
+    if (!role || !item.roles.includes(role)) return false;
+    if (role === 'dil_admin' && (item.to === '/students' || item.to === '/admin')) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-background">

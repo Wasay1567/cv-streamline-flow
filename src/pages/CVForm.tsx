@@ -175,6 +175,72 @@ const CVForm = () => {
     };
   };
 
+  const toStringArray = (value: unknown, key: string): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          const v = (item as Record<string, unknown>)[key];
+          return typeof v === 'string' ? v : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+  };
+
+  const mapBackendCVToFrontend = (raw: unknown): Partial<CVData> => {
+    if (!raw || typeof raw !== 'object') return {};
+    const data = raw as Record<string, unknown>;
+    const personal = (data.personal_info ?? data.personalInfo) as Record<string, unknown> | null;
+    const internships = Array.isArray(data.internships) ? (data.internships as Record<string, unknown>[]) : [];
+    const visits = Array.isArray(data.industrial_visits ?? data.industrialVisits)
+      ? ((data.industrial_visits ?? data.industrialVisits) as Record<string, unknown>[])
+      : [];
+
+    return {
+      student_image: String(data.student_image ?? data.student_image_url ?? ''),
+      personalInfo: personal
+        ? {
+            name: String(personal.name ?? ''),
+            fatherName: String(personal.father_name ?? personal.fatherName ?? ''),
+            department: String(personal.department ?? ''),
+            batch: String(personal.batch ?? ''),
+            cell: String(personal.cell ?? ''),
+            rollNo: String(personal.roll_no ?? personal.rollNo ?? ''),
+            cnic: String(personal.cnic ?? ''),
+            email: String(personal.email ?? ''),
+            gender: String(personal.gender ?? 'Male') as 'Male' | 'Female' | 'Other',
+            dob: String(personal.dob ?? ''),
+            address: String(personal.address ?? ''),
+          }
+        : undefined,
+      academics: Array.isArray(data.academics) ? (data.academics as CVData['academics']) : undefined,
+      fyp: ((data.fyp as CVData['fyp']) || undefined),
+      careerCounseling:
+        typeof data.careerCounseling === 'boolean'
+          ? (data.careerCounseling as boolean)
+          : (typeof data.career_counseling === 'boolean' ? (data.career_counseling as boolean) : undefined),
+      internships: internships.map((i) => ({
+        organization: String(i.organization ?? ''),
+        position: String(i.position ?? ''),
+        field: String(i.field ?? ''),
+        from: String(i.from ?? i.from_date ?? ''),
+        to: String(i.to ?? i.to_date ?? ''),
+      })),
+      industrialVisits: visits.map((v) => ({
+        organization: String(v.organization ?? ''),
+        purpose: String(v.purpose ?? ''),
+        date: String(v.date ?? v.visit_date ?? ''),
+      })),
+      certificates: toStringArray(data.certificates, 'name'),
+      achievements: toStringArray(data.achievements, 'description'),
+      skills: toStringArray(data.skills, 'name'),
+      extraCurricular: toStringArray(data.extra_curricular ?? data.extraCurricular, 'activity'),
+      references: Array.isArray(data.references) ? (data.references as CVData['references']) : undefined,
+    };
+  };
+
   useEffect(() => {
     if (!user) return;
     // Fetch user's database ID from profile endpoint
@@ -219,8 +285,11 @@ const CVForm = () => {
 
         if (!latest) return;
 
-        setExistingId(latest.id || null);
-        setCvData(hydrateCVData((latest.cv_data || {}) as Partial<CVData>));
+        const latestRow = latest as unknown as Record<string, unknown>;
+        setExistingId(String(latestRow.id ?? latestRow.cv_id ?? ''));
+        const rawCvPayload = (latestRow.cv_data ?? latestRow) as unknown;
+        const mapped = mapBackendCVToFrontend(rawCvPayload);
+        setCvData(hydrateCVData(mapped));
       } catch (error) {
         console.error('Error fetching existing submission:', error);
       }
@@ -372,6 +441,7 @@ const CVForm = () => {
           const response = await fetch(import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify({
+              action: "upload",
               fileName: fileName,
               base64Data: base64String,
               mimeType: file.type,
@@ -413,6 +483,7 @@ const CVForm = () => {
     }
   };
 
+  
   const saveDraft = async () => {
     if (!user) return;
     setSaving(true);
@@ -448,10 +519,8 @@ const CVForm = () => {
 
     setSaving(true);
     try {
-      // Call backend POST /cv-submissions/ endpoint with both CV data and image
-      await backend.createCV({
-        cv_data: cvData
-      });
+      // Send raw CV object (no cv_data wrapper)
+      await backend.createCV(cvData);
       toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
       navigate('/dashboard');
     } catch (error) {

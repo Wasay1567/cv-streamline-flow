@@ -1,22 +1,51 @@
 import { useEffect, useState } from 'react';
 import { backend } from '@/integrations/api/backend';
-import type { CVListItem } from '@/integrations/api/backend';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusBadge from '@/components/StatusBadge';
-import CVViewDialog from '@/components/CVViewDialog';
 import type { CVSubmission } from '@/types/cv';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
+interface AdvisorSubmissionRow {
+  cv_id: string;
+  student_email: string;
+  department: string;
+  batch: string;
+  cgpa: string;
+  internships_count: number;
+  cv_status: string;
+}
+
+const normalizeAdvisorSubmission = (item: unknown): AdvisorSubmissionRow | null => {
+  if (!item || typeof item !== 'object') return null;
+  const row = item as Record<string, unknown>;
+  const summary = (row.summary as Record<string, unknown> | undefined) || {};
+  const personal = (row.personal_info as Record<string, unknown> | undefined) || {};
+  const academics = Array.isArray(row.academics) ? (row.academics as Record<string, unknown>[]) : [];
+  const internships = Array.isArray(row.internships) ? row.internships : [];
+
+  const cvId = String(row.cv_id ?? summary.cv_id ?? row.id ?? '');
+  if (!cvId) return null;
+
+  return {
+    cv_id: cvId,
+    student_email: String(row.student_email ?? summary.student_email ?? ''),
+    department: String(summary.department ?? personal.department ?? ''),
+    batch: String(summary.batch ?? personal.batch ?? ''),
+    cgpa: String(summary.cgpa ?? academics[0]?.gpa ?? '-'),
+    internships_count: Number(summary.internships_count ?? internships.length ?? 0),
+    cv_status: String(row.status ?? row.cv_status ?? summary.cv_status ?? 'not_submitted'),
+  };
+};
 
 const AdvisorDashboard = () => {
   const { toast } = useToast();
-  const [submissions, setSubmissions] = useState<CVListItem[]>([]);
+  const [submissions, setSubmissions] = useState<AdvisorSubmissionRow[]>([]);
   const [selectedCVId, setSelectedCVId] = useState<string | null>(null);
   const [selectedCVDetails, setSelectedCVDetails] = useState<CVSubmission | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +58,10 @@ const AdvisorDashboard = () => {
       console.log('Fetching submissions...');
       const subs = await backend.listCVs();
       console.log('Fetched submissions:', subs);
-      setSubmissions(Array.isArray(subs) ? subs : []);
+      const normalized = Array.isArray(subs)
+        ? subs.map(normalizeAdvisorSubmission).filter(Boolean) as AdvisorSubmissionRow[]
+        : [];
+      setSubmissions(normalized);
     } catch (error) {
       console.error('Error fetching submissions:', error);
       const message = error instanceof Error ? error.message : 'Failed to load submissions';
@@ -161,6 +193,7 @@ const AdvisorDashboard = () => {
                   <TableHead>Department</TableHead>
                   <TableHead>Batch</TableHead>
                   <TableHead>CGPA</TableHead>
+                  <TableHead>Internships</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -172,8 +205,9 @@ const AdvisorDashboard = () => {
                     <TableCell>{sub.department}</TableCell>
                     <TableCell>{sub.batch}</TableCell>
                     <TableCell>{sub.cgpa}</TableCell>
+                    <TableCell>{sub.internships_count}</TableCell>
                     <TableCell>
-                      <StatusBadge status={sub.cv_status} />
+                      <StatusBadge status={sub.cv_status as any} />
                     </TableCell>
                     <TableCell className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => handleViewCV(sub.cv_id)}>
@@ -203,7 +237,7 @@ const AdvisorDashboard = () => {
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No submissions found
                     </TableCell>
                   </TableRow>

@@ -18,6 +18,108 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 
+const toStringArray = (value: unknown, key: string): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object') {
+        const v = (item as Record<string, unknown>)[key];
+        return typeof v === 'string' ? v : '';
+      }
+      return '';
+    })
+    .filter(Boolean);
+};
+
+const mapApiCvDataToFrontend = (row: Record<string, unknown>): CVData => {
+  const personal = (row.personal_info as Record<string, unknown> | undefined) || {};
+  const internships = Array.isArray(row.internships) ? (row.internships as Record<string, unknown>[]) : [];
+  const visits = Array.isArray(row.industrial_visits) ? (row.industrial_visits as Record<string, unknown>[]) : [];
+  const academics = Array.isArray(row.academics) ? (row.academics as Record<string, unknown>[]) : [];
+
+  return {
+    student_image: String(row.student_image ?? row.student_image_url ?? ''),
+    personalInfo: {
+      name: String(personal.name ?? ''),
+      fatherName: String(personal.father_name ?? ''),
+      department: String(personal.department ?? ''),
+      batch: String(personal.batch ?? ''),
+      cell: String(personal.cell ?? ''),
+      rollNo: String(personal.roll_no ?? ''),
+      cnic: String(personal.cnic ?? ''),
+      email: String(personal.email ?? ''),
+      gender: String(personal.gender ?? 'Male') as 'Male' | 'Female' | 'Other',
+      dob: String(personal.dob ?? ''),
+      address: String(personal.address ?? ''),
+    },
+    academics: academics.map((a) => ({
+      degree: String(a.degree ?? ''),
+      university: String(a.university ?? ''),
+      year: String(a.year ?? ''),
+      gpa: String(a.gpa ?? ''),
+      majors: String(a.majors ?? ''),
+    })),
+    fyp: {
+      title: String((row.fyp as Record<string, unknown> | undefined)?.title ?? ''),
+      company: String((row.fyp as Record<string, unknown> | undefined)?.company ?? ''),
+      objectives: String((row.fyp as Record<string, unknown> | undefined)?.objectives ?? ''),
+    },
+    careerCounseling: Boolean(row.career_counseling),
+    internships: internships.map((i) => ({
+      organization: String(i.organization ?? ''),
+      position: String(i.position ?? ''),
+      field: String(i.field ?? ''),
+      from: String(i.from_date ?? i.from ?? ''),
+      to: String(i.to_date ?? i.to ?? ''),
+    })),
+    industrialVisits: visits.map((v) => ({
+      organization: String(v.organization ?? ''),
+      purpose: String(v.purpose ?? ''),
+      date: String(v.visit_date ?? v.date ?? ''),
+    })),
+    certificates: toStringArray(row.certificates, 'name'),
+    achievements: toStringArray(row.achievements, 'description'),
+    skills: toStringArray(row.skills, 'name'),
+    extraCurricular: toStringArray(row.extra_curricular, 'activity'),
+    references: Array.isArray(row.references)
+      ? (row.references as Record<string, unknown>[]).map((r) => ({
+          name: String(r.name ?? ''),
+          contact: String(r.contact ?? ''),
+          occupation: String(r.occupation ?? ''),
+          relation: String(r.relation ?? ''),
+        }))
+      : [],
+  };
+};
+
+const normalizeAdminSubmission = (input: unknown): (CVSubmission & { profiles: Profile }) | null => {
+  if (!input || typeof input !== 'object') return null;
+  const row = input as Record<string, unknown>;
+  const summary = (row.summary as Record<string, unknown> | undefined) || {};
+  const personal = (row.personal_info as Record<string, unknown> | undefined) || {};
+
+  const id = String(row.cv_id ?? row.id ?? '');
+  if (!id) return null;
+
+  return {
+    id,
+    student_id: String(row.student_id ?? row.student_email ?? ''),
+    status: String(row.status ?? row.cv_status ?? summary.cv_status ?? 'not_submitted') as CVStatus,
+    cv_data: mapApiCvDataToFrontend(row),
+    rejection_comment: String(row.rejection_comment ?? ''),
+    submitted_at: (row.submitted_at ?? row.created_at ?? null) as string | null,
+    updated_at: String(row.updated_at ?? ''),
+    profiles: {
+      id: String(row.student_id ?? ''),
+      email: String(row.student_email ?? summary.student_email ?? ''),
+      full_name: String(personal.name ?? ''),
+      department: String(summary.department ?? personal.department ?? ''),
+      batch: String(summary.batch ?? personal.batch ?? ''),
+    },
+  };
+};
+
 const AdminDashboard = () => {
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<(CVSubmission & { profiles: Profile })[]>([]);
@@ -57,19 +159,8 @@ const AdminDashboard = () => {
         // backend.listUserRoles(),
         backend.getPendingAdvisors(),
       ]);
-      // Format CVListItem data for the admin dashboard
-      const formattedSubs = Array.isArray(subs) 
-        ? subs.map((sub: any) => ({
-            ...sub,
-            id: sub.cv_id,
-            status: sub.cv_status,
-            student_id: sub.student_email,
-            profiles: {
-              email: sub.student_email,
-              department: sub.department,
-              batch: sub.batch,
-            },
-          }))
+      const formattedSubs = Array.isArray(subs)
+        ? subs.map(normalizeAdminSubmission).filter(Boolean) as (CVSubmission & { profiles: Profile })[]
         : [];
       
       setSubmissions(formattedSubs);
@@ -109,7 +200,8 @@ const AdminDashboard = () => {
   const handleViewCV = async (cvId: string) => {
     try {
       const details = await backend.getCV(cvId);
-      setSelectedCV(details);
+      const normalized = normalizeAdminSubmission(details);
+      setSelectedCV(normalized || null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load CV details';
       toast({ title: 'Error', description: message, variant: 'destructive' });
