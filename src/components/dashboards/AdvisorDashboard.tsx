@@ -82,8 +82,9 @@ const mapApiCvDataToFrontend = (row: Record<string, unknown>): CVData => {
     academics: academics.map((a) => ({
       degree: String(a.degree ?? ''),
       university: String(a.university ?? ''),
-      year: String(a.year ?? ''),
-      gpa: String(a.gpa ?? ''),
+      from_date: String(a.from_date ?? a.from ?? a.year ?? ''),
+      to_date: String(a.to_date ?? a.to ?? ''),
+      gpa: Number.isFinite(Number(a.gpa)) ? Number(a.gpa) : Number.NaN,
       majors: String(a.majors ?? ''),
     })),
     fyp: {

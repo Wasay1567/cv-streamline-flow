@@ -28,8 +28,11 @@ export const cvSchema = z.object({
         z.object({
       degree: z.string().min(1, "Degree is required"),
       university: z.string().min(2, "University/Board name is required"),
-      year: z.string().regex(/^\d{4}$/, "Year must be 4 digits"),
-      gpa: z.string().min(1, "GPA/Percentage is required"),
+      from_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Format: YYYY-MM-DD"),
+      to_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Format: YYYY-MM-DD"),
+      gpa: z.coerce
+        .number()
+        .refine((value) => Number.isFinite(value), "GPA must be a valid number"),
       majors: z.string().min(2, "Major is Required"),
     })
   ),
@@ -49,6 +52,7 @@ export const cvSchema = z.object({
       field: z.string().trim().optional().or(z.literal('')),
       from: z.string().trim().optional().or(z.literal('')),
       to: z.string().trim().optional().or(z.literal('')),
+      duties: z.array(z.string().trim()).optional().default([]),
     })
   ),
 
@@ -78,8 +82,9 @@ export const cvSchema = z.object({
 export interface AcademicRecord {
   degree: string;
   university: string;
-  year: string;
-  gpa: string;
+  from_date: string;
+  to_date: string;
+  gpa: number;
   majors: string;
 }
 
@@ -89,6 +94,7 @@ export interface Internship {
   field: string;
   from: string;
   to: string;
+  duties: string[];
 }
 
 export interface Reference {
@@ -215,9 +221,9 @@ export const emptyCVData: CVData = {
   // Initializing with 3 objects ensures the University, HSC, and SSC rows 
   // are immediately editable and match your static UI mapping [0, 1, 2]
   academics: [
-    { degree: '', university: '', year: '', gpa: '', majors: '' },    // Index 0: University
-    { degree: 'HSC', university: '', year: '', gpa: '', majors: '' },   // Index 1: HSC
-    { degree: 'SSC', university: '', year: '', gpa: '', majors: '' },   // Index 2: SSC
+    { degree: '', university: '', from_date: '', to_date: '', gpa: Number.NaN, majors: '' },    // Index 0: University
+    { degree: 'HSC', university: '', from_date: '', to_date: '', gpa: Number.NaN, majors: '' },   // Index 1: HSC
+    { degree: 'SSC', university: '', from_date: '', to_date: '', gpa: Number.NaN, majors: '' },   // Index 2: SSC
   ],
   fyp: { 
     title: '', 

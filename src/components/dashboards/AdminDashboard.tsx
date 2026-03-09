@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { backend } from '@/integrations/api/backend';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import StatusBadge from '@/components/StatusBadge';
 import CVViewDialog from '@/components/CVViewDialog';
-import type { CVSubmission, CVStatus, CVData, Profile, AppRole } from '@/types/cv';
+import type { CVSubmission, CVStatus, CVData, Profile } from '@/types/cv';
 import { DEPARTMENTS, BATCHES } from '@/types/cv';
 import { useToast } from '@/hooks/use-toast';
-import { Users, CheckCircle, BarChart3, Shield, Search, Mail, Filter, X } from 'lucide-react';
+import { Users, CheckCircle, BarChart3, Mail, Filter, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -56,8 +56,9 @@ const mapApiCvDataToFrontend = (row: Record<string, unknown>): CVData => {
     academics: academics.map((a) => ({
       degree: String(a.degree ?? ''),
       university: String(a.university ?? ''),
-      year: String(a.year ?? ''),
-      gpa: String(a.gpa ?? ''),
+      from_date: String(a.from_date ?? a.from ?? a.year ?? ''),
+      to_date: String(a.to_date ?? a.to ?? ''),
+      gpa: Number.isFinite(Number(a.gpa)) ? Number(a.gpa) : Number.NaN,
       majors: String(a.majors ?? ''),
     })),
     fyp: {
@@ -124,21 +125,12 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<(CVSubmission & { profiles: Profile })[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [roles, setRoles] = useState<{ user_id: string; role: AppRole }[]>([]);
   const [pendingAdvisors, setPendingAdvisors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCV, setSelectedCV] = useState<CVSubmission | null>(null);
   const [tab, setTab] = useState('overview');
 
-  // User search
-  const [userSearch, setUserSearch] = useState('');
-
-  // Role dialog
-  const [roleDialog, setRoleDialog] = useState<{ userId: string; email: string } | null>(null);
-  const [newRole, setNewRole] = useState<AppRole>('student');
-
   // CV filters
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [batchFilter, setBatchFilter] = useState<string>('all');
   const [skillSearch, setSkillSearch] = useState('');
@@ -176,7 +168,6 @@ const AdminDashboard = () => {
         variant: 'destructive',
       });
       setSubmissions([]);
-      setRoles([]);
       setPendingAdvisors([]);
       setProfiles([]);
     } finally {
@@ -208,14 +199,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleRoleChange = async () => {
-    if (!roleDialog) return;
-    await backend.setUserRole(roleDialog.userId, newRole);
-    toast({ title: 'Role updated', description: `${roleDialog.email} is now ${newRole}` });
-    setRoleDialog(null);
-    fetchData();
-  };
-
   const handleBulkNotify = async () => {
     setNotifySending(true);
     try {
@@ -224,7 +207,7 @@ const AdminDashboard = () => {
         body: notifyBody,
         deadline: notifyDeadline || undefined,
       });
-      toast({ title: 'Notifications sent!', description: `Emailed ${data?.sent || 0} students.` });
+      toast({ title: 'Notifications sent!', description: `Emailed all students.` });
       setNotifyDialog(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send notifications';
@@ -267,18 +250,10 @@ const AdminDashboard = () => {
 
   const pendingDil = submissions.filter(s => s.status === 'pending_dil');
 
-  // Filtered users
-  const filteredUsers = profiles.filter(p => {
-    if (!userSearch) return true;
-    const q = userSearch.toLowerCase();
-    return p.email.toLowerCase().includes(q) || (p.full_name || '').toLowerCase().includes(q);
-  });
-
   // Filtered CVs
   const filteredCVs = submissions.filter(sub => {
     const profile = sub.profiles as unknown as Profile;
     const cv = sub.cv_data as CVData;
-    if (statusFilter !== 'all' && sub.status !== statusFilter) return false;
     if (deptFilter !== 'all' && profile?.department !== deptFilter) return false;
     if (batchFilter !== 'all' && profile?.batch !== batchFilter) return false;
     if (skillSearch) {
@@ -294,8 +269,8 @@ const AdminDashboard = () => {
     if (sortByCGPA) {
       const cvA = a.cv_data as CVData;
       const cvB = b.cv_data as CVData;
-      const cgpaA = parseFloat(cvA?.academics?.[0]?.gpa || '0');
-      const cgpaB = parseFloat(cvB?.academics?.[0]?.gpa || '0');
+      const cgpaA = Number(cvA?.academics?.[0]?.gpa ?? 0);
+      const cgpaB = Number(cvB?.academics?.[0]?.gpa ?? 0);
       return cgpaB - cgpaA; // Descending order
     }
     return 0;
@@ -319,9 +294,6 @@ const AdminDashboard = () => {
         <TabsList>
           <TabsTrigger value="overview" className="gap-1"><BarChart3 className="h-4 w-4" /> Overview</TabsTrigger>
           <TabsTrigger value="cvs" className="gap-1"><Filter className="h-4 w-4" /> CV Submissions ({submissions.length})</TabsTrigger>
-          <TabsTrigger value="pending" className="gap-1"><CheckCircle className="h-4 w-4" /> Pending ({pendingDil.length})</TabsTrigger>
-          <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" /> Users</TabsTrigger>
-          <TabsTrigger value="roles" className="gap-1"><Shield className="h-4 w-4" /> Roles</TabsTrigger>
           <TabsTrigger value="advisors" className="gap-1"><Users className="h-4 w-4" /> Pending Advisors ({pendingAdvisors.length})</TabsTrigger>
         </TabsList>
 
@@ -372,21 +344,7 @@ const AdminDashboard = () => {
               <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Advanced Filters</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 md:grid-cols-6">
-                <div className="space-y-1">
-                  <Label className="text-xs">Status</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="not_submitted">Not Submitted</SelectItem>
-                      <SelectItem value="pending_advisor">Pending Advisor</SelectItem>
-                      <SelectItem value="pending_dil">Pending DIL</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid gap-3 md:grid-cols-5">
                 <div className="space-y-1">
                   <Label className="text-xs">Department</Label>
                   <Select value={deptFilter} onValueChange={setDeptFilter}>
@@ -418,12 +376,12 @@ const AdminDashboard = () => {
                 <div className="space-y-1 flex items-end">
                   <div className="flex items-center gap-2">
                     <Checkbox id="sort-cgpa" checked={sortByCGPA} onCheckedChange={(checked) => setSortByCGPA(checked as boolean)} />
-                    <Label htmlFor="sort-cgpa" className="text-xs cursor-pointer">Sort by CGPA ↓</Label>
+                    <Label htmlFor="sort-cgpa" className="text-xs cursor-pointer">Sort by CGPA â†“</Label>
                   </div>
                 </div>
               </div>
-              {(statusFilter !== 'all' || deptFilter !== 'all' || batchFilter !== 'all' || skillSearch || minInternships || sortByCGPA) && (
-                <Button variant="ghost" size="sm" className="mt-2 gap-1" onClick={() => { setStatusFilter('all'); setDeptFilter('all'); setBatchFilter('all'); setSkillSearch(''); setMinInternships(''); setSortByCGPA(false); }}>
+              {(deptFilter !== 'all' || batchFilter !== 'all' || skillSearch || minInternships || sortByCGPA) && (
+                <Button variant="ghost" size="sm" className="mt-2 gap-1" onClick={() => { setDeptFilter('all'); setBatchFilter('all'); setSkillSearch(''); setMinInternships(''); setSortByCGPA(false); }}>
                   <X className="h-3 w-3" /> Clear Filters
                 </Button>
               )}
@@ -463,7 +421,9 @@ const AdminDashboard = () => {
                             {(cv?.skills?.length || 0) > 3 && <Badge variant="outline" className="text-xs">+{cv.skills.length - 3}</Badge>}
                           </div>
                         </TableCell>
-                        <TableCell className="font-semibold">{cv?.academics?.[0]?.gpa || '—'}</TableCell>
+                        <TableCell className="font-semibold">
+                          {Number.isFinite(cv?.academics?.[0]?.gpa) ? cv.academics[0].gpa : 'â€”'}
+                        </TableCell>
                         <TableCell>{cv?.internships?.length || 0}</TableCell>
                         <TableCell className="flex gap-2">
                           <Button size="sm" variant="outline" onClick={() => handleViewCV(sub.id)}>View</Button>
@@ -484,111 +444,6 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* Pending Tab */}
-        <TabsContent value="pending">
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead><TableHead>Department</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingDil.map(sub => {
-                  const profile = sub.profiles as unknown as Profile;
-                  return (
-                    <TableRow key={sub.id}>
-                      <TableCell className="font-medium">{profile?.full_name || profile?.email}</TableCell>
-                      <TableCell>{profile?.department}</TableCell>
-                      <TableCell><StatusBadge status={sub.status as CVStatus} /></TableCell>
-                      <TableCell className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => handleViewCV(sub.id)}>View</Button>
-                        <Button size="sm" className="gap-1" onClick={() => handleFinalApprove(sub.id)}>
-                          <CheckCircle className="h-3 w-3" /> Final Approve
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {pendingDil.length === 0 && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No pending approvals</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        {/* Users Tab */}
-        <TabsContent value="users" className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search by email or name..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="max-w-sm" />
-          </div>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Batch</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map(p => {
-                    const userRole = roles.find(r => r.user_id === p.id);
-                    return (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-medium">{p.full_name || '—'}</TableCell>
-                        <TableCell>{p.email}</TableCell>
-                        <TableCell>{p.department || '—'}</TableCell>
-                        <TableCell>{p.batch || '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant={userRole?.role === 'dil_admin' ? 'default' : userRole?.role === 'advisor' ? 'secondary' : 'outline'}>
-                            {userRole?.role || 'student'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => {
-                            setRoleDialog({ userId: p.id, email: p.email });
-                            setNewRole((userRole?.role as AppRole) || 'student');
-                          }}>Change Role</Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {filteredUsers.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Roles Tab */}
-        <TabsContent value="roles">
-          <Card>
-            <CardHeader><CardTitle>Role Distribution</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3 mb-6">
-                {(['student', 'advisor', 'dil_admin'] as AppRole[]).map(r => (
-                  <Card key={r}>
-                    <CardContent className="pt-6 text-center">
-                      <p className="text-2xl font-bold">{roles.filter(rl => rl.role === r).length}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{r.replace('_', ' ')}s</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Pending Advisors Tab */}
         <TabsContent value="advisors" className="space-y-4">
           <Card>
@@ -651,24 +506,6 @@ const AdminDashboard = () => {
       </Tabs>
 
       <CVViewDialog submission={selectedCV} onClose={() => setSelectedCV(null)} />
-      {/* Role Change Dialog */}
-      <Dialog open={!!roleDialog} onOpenChange={() => setRoleDialog(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Change Role for {roleDialog?.email}</DialogTitle></DialogHeader>
-          <Select value={newRole} onValueChange={v => setNewRole(v as AppRole)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="student">Student</SelectItem>
-              <SelectItem value="advisor">Advisor</SelectItem>
-              <SelectItem value="dil_admin">DIL Admin</SelectItem>
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleDialog(null)}>Cancel</Button>
-            <Button onClick={handleRoleChange}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Bulk Notify Dialog */}
       <Dialog open={notifyDialog} onOpenChange={setNotifyDialog}>
@@ -704,3 +541,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+// 

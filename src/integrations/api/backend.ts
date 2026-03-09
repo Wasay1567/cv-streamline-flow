@@ -55,8 +55,8 @@ export const backend = {
   },
 
   // CV endpoints
-  createCV(payload: CVData) {
-    return api.post<CVSubmission>("/cv-submissions", payload);
+  createCV(payload: unknown) {
+    return api.post<CVSubmission>("/cv-submissions/", payload);
   },
 
   listCVs() {
@@ -135,6 +135,6 @@ export const backend = {
   },
 
   bulkNotifyStudents(payload: BulkNotifyPayload) {
-    return api.post<BulkNotifyResult>("/notifications/bulk", payload);
+    return api.post<BulkNotifyResult>("/admin/students/notify-missing-cv", payload);
   },
 };

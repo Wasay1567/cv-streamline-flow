@@ -73,8 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Get role/setup hints from Clerk metadata (fallback only)
         const clerkRole = normalizeRole(clerkUser.unsafeMetadata?.role);
         const clerkProfileComplete = clerkUser.unsafeMetadata?.profileSetupComplete === true;
-        const localProfileComplete = auth.isProfileSetupComplete();
-
         // Resolve authoritative role before leaving loading state to avoid mounting the wrong dashboard.
         try {
           const { backend } = await import('@/integrations/api/backend');
@@ -83,17 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userProfile) {
             // Some backends omit role on /profiles; use Clerk role as fallback.
             const profileRole = normalizeRole(userProfile.role);
-            setRole(profileRole || clerkRole);
-            // A resolved profile means setup is complete for student/advisor flows.
-            setProfileSetupComplete(true);
+            const resolvedRole = profileRole || clerkRole;
+            const hasDepartment = typeof userProfile.department === 'string' && userProfile.department.trim().length > 0;
+            const isDilAdmin = resolvedRole === 'dil_admin';
+
+            setRole(resolvedRole);
+            // Student/advisor setup is complete only when role + department exist.
+            // DIL admin bypasses setup-profile.
+            setProfileSetupComplete(isDilAdmin || (!!resolvedRole && hasDepartment));
           } else {
             setRole(clerkRole);
-            setProfileSetupComplete(localProfileComplete || clerkProfileComplete || !!clerkRole);
+            setProfileSetupComplete(clerkProfileComplete || false);
           }
         } catch (error) {
           console.warn('Could not fetch user profile from database; falling back to Clerk metadata:', error);
           setRole(clerkRole);
-          setProfileSetupComplete(localProfileComplete || clerkProfileComplete || !!clerkRole);
+          setProfileSetupComplete(clerkProfileComplete || false);
         }
       } else {
         setUser(null);

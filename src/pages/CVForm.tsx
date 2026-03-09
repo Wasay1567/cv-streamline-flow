@@ -75,6 +75,7 @@ const CVForm = () => {
   const [imageUploading, setImageUploading] = useState(false);
   const [dbUserId, setDbUserId] = useState<string>('');
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [gpaDrafts, setGpaDrafts] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -189,10 +190,28 @@ const CVForm = () => {
       .filter(Boolean);
   };
 
+  const toISODateOnly = (value: unknown): string => {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const trimmed = value.trim();
+    // Already date-only ISO
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().slice(0, 10);
+  };
+
+  const toDateStringPreserve = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    const raw = value.trim();
+    if (!raw) return '';
+    return toISODateOnly(raw) || raw;
+  };
+
   const mapBackendCVToFrontend = (raw: unknown): Partial<CVData> => {
     if (!raw || typeof raw !== 'object') return {};
     const data = raw as Record<string, unknown>;
     const personal = (data.personal_info ?? data.personalInfo) as Record<string, unknown> | null;
+    const academics = Array.isArray(data.academics) ? (data.academics as Record<string, unknown>[]) : [];
     const internships = Array.isArray(data.internships) ? (data.internships as Record<string, unknown>[]) : [];
     const visits = Array.isArray(data.industrial_visits ?? data.industrialVisits)
       ? ((data.industrial_visits ?? data.industrialVisits) as Record<string, unknown>[])
@@ -211,11 +230,18 @@ const CVForm = () => {
             cnic: String(personal.cnic ?? ''),
             email: String(personal.email ?? ''),
             gender: String(personal.gender ?? 'Male') as 'Male' | 'Female' | 'Other',
-            dob: String(personal.dob ?? ''),
+            dob: toISODateOnly(personal.dob ?? ''),
             address: String(personal.address ?? ''),
           }
         : undefined,
-      academics: Array.isArray(data.academics) ? (data.academics as CVData['academics']) : undefined,
+      academics: academics.map((a) => ({
+        degree: String(a.degree ?? ''),
+        university: String(a.university ?? ''),
+        from_date: toDateStringPreserve(a.from_date ?? a.from ?? ''),
+        to_date: toDateStringPreserve(a.to_date ?? a.to ?? ''),
+        gpa: Number.isFinite(Number(a.gpa)) ? Number(a.gpa) : Number.NaN,
+        majors: String(a.majors ?? ''),
+      })),
       fyp: ((data.fyp as CVData['fyp']) || undefined),
       careerCounseling:
         typeof data.careerCounseling === 'boolean'
@@ -225,13 +251,16 @@ const CVForm = () => {
         organization: String(i.organization ?? ''),
         position: String(i.position ?? ''),
         field: String(i.field ?? ''),
-        from: String(i.from ?? i.from_date ?? ''),
-        to: String(i.to ?? i.to_date ?? ''),
+        duties: Array.isArray(i.duties)
+          ? (i.duties as unknown[]).map((d) => String(d ?? '').trim()).filter(Boolean)
+          : [],
+        from: toDateStringPreserve(i.from ?? i.from_date ?? ''),
+        to: toDateStringPreserve(i.to ?? i.to_date ?? ''),
       })),
       industrialVisits: visits.map((v) => ({
         organization: String(v.organization ?? ''),
         purpose: String(v.purpose ?? ''),
-        date: String(v.date ?? v.visit_date ?? ''),
+        date: toDateStringPreserve(v.date ?? v.visit_date ?? ''),
       })),
       certificates: toStringArray(data.certificates, 'name'),
       achievements: toStringArray(data.achievements, 'description'),
@@ -240,6 +269,65 @@ const CVForm = () => {
       references: Array.isArray(data.references) ? (data.references as CVData['references']) : undefined,
     };
   };
+
+  const mapFrontendCVToBackend = (data: CVData) => ({
+    student_image: data.student_image,
+    careerCounseling: data.careerCounseling,
+    personalInfo: {
+      name: data.personalInfo.name,
+      fatherName: data.personalInfo.fatherName,
+      department: data.personalInfo.department,
+      batch: data.personalInfo.batch,
+      cell: data.personalInfo.cell,
+      rollNo: data.personalInfo.rollNo,
+      cnic: data.personalInfo.cnic,
+      email: data.personalInfo.email,
+      gender: data.personalInfo.gender,
+      dob: toDateStringPreserve(data.personalInfo.dob),
+      address: data.personalInfo.address,
+    },
+    academics: data.academics.map((a) => ({
+      degree: a.degree,
+      university: a.university,
+      from_date: toDateStringPreserve(a.from_date),
+      to_date: toDateStringPreserve(a.to_date),
+      gpa: Number.isFinite(a.gpa) ? String(a.gpa) : '',
+      majors: a.majors,
+    })),
+    internships: data.internships
+      .filter((i) => i.organization || i.position || i.field || i.from || i.to)
+      .map((i) => ({
+        organization: i.organization,
+        position: i.position,
+        field: i.field,
+        duties: (i.duties || []).map((d) => d.trim()).filter(Boolean),
+        from_date: toDateStringPreserve(i.from) || null,
+        to_date: toDateStringPreserve(i.to) || null,
+      })),
+    industrialVisits: data.industrialVisits
+      .map((v) => ({
+        organization: (v.organization || '').trim(),
+        purpose: (v.purpose || '').trim(),
+        date: toDateStringPreserve(v.date),
+      }))
+      // Send only complete visit rows to avoid backend 500 on null/empty required fields
+      .filter((v) => v.organization && v.purpose && v.date),
+    fyp: {
+      title: data.fyp.title,
+      company: data.fyp.company,
+      objectives: data.fyp.objectives,
+    },
+    certificates: data.certificates,
+    achievements: data.achievements,
+    skills: data.skills,
+    extraCurricular: data.extraCurricular,
+    references: data.references.map((r) => ({
+      name: r.name,
+      contact: r.contact,
+      occupation: r.occupation,
+      relation: r.relation,
+    })),
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -270,6 +358,7 @@ const CVForm = () => {
 
         if (!latest) {
           const single = await backend.getMySubmission();
+          // console.log("payload from backend: ",single)
           latest = pickLatestSubmission(single);
           latestId = latestId || pickLatestId(single);
         }
@@ -345,7 +434,7 @@ const CVForm = () => {
   // Academics
   const addAcademic = () => {
     setCvData(prev => (
-      { ...prev, academics: [...prev.academics, { degree: '', university: '', year: '', gpa: '', majors: '' }] }
+      { ...prev, academics: [...prev.academics, { degree: '', university: '', from_date: '', to_date: '', gpa: Number.NaN, majors: '' }] }
     ));
   }
   const removeAcademic = (i: number) => {
@@ -353,7 +442,7 @@ const CVForm = () => {
       { ...prev, academics: prev.academics.filter((_, idx) => idx !== i) }
     ));
   }
-  const updateAcademic = (i: number, field: keyof AcademicRecord, value: string) => {
+  const updateAcademic = (i: number, field: keyof AcademicRecord, value: string | number) => {
     setCvData(prev => ({ ...prev, academics: prev.academics.map((a, idx) => idx === i ? { ...a, [field]: value } : a) }));
   };
 
@@ -375,7 +464,7 @@ const CVForm = () => {
     }));
   };
 
-  const addInternship = () => setCvData(prev => ({ ...prev, internships: [...prev.internships, { organization: '', position: '', field: '', from: '', to: '' }] }));
+  const addInternship = () => setCvData(prev => ({ ...prev, internships: [...prev.internships, { organization: '', position: '', field: '', duties: [], from: '', to: '' }] }));
   const removeInternship = (i: number) => setCvData(prev => ({ ...prev, internships: prev.internships.filter((_, idx) => idx !== i) }));
   const updateInternship = (i: number, field: keyof Internship, value: string) => {
     setCvData(prev => ({ ...prev, internships: prev.internships.map((a, idx) => idx === i ? { ...a, [field]: value } : a) }));
@@ -519,8 +608,9 @@ const CVForm = () => {
 
     setSaving(true);
     try {
-      // Send raw CV object (no cv_data wrapper)
-      await backend.createCV(cvData);
+      const payload = mapFrontendCVToBackend(cvData);
+      console.log('[CVForm] submit payload', payload);
+      await backend.createCV(payload as unknown as CVData);
       toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
       navigate('/dashboard');
     } catch (error) {
@@ -743,17 +833,33 @@ const CVForm = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label>Year of Passing</Label>
+                          <Label>From Date</Label>
                           <Input
-                            value={a.year || ""}
-                            className={fieldClass(["academics", i, "year"])}
-                            onChange={(e) => updateAcademic(i, "year", e.target.value)}
-                            onBlur={() => validateField(["academics", i, "year"])}
-                            placeholder="YYYY"
+                            type="date"
+                            value={a.from_date || ""}
+                            className={fieldClass(["academics", i, "from_date"])}
+                            onChange={(e) => updateAcademic(i, "from_date", e.target.value)}
+                            onBlur={() => validateField(["academics", i, "from_date"])}
                           />
-                          {fieldError(["academics", i, "year"]) && (
+                          {fieldError(["academics", i, "from_date"]) && (
                             <p className="text-xs text-destructive">
-                              {fieldError(["academics", i, "year"])}
+                              {fieldError(["academics", i, "from_date"])}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>To Date</Label>
+                          <Input
+                            type="date"
+                            value={a.to_date || ""}
+                            className={fieldClass(["academics", i, "to_date"])}
+                            onChange={(e) => updateAcademic(i, "to_date", e.target.value)}
+                            onBlur={() => validateField(["academics", i, "to_date"])}
+                          />
+                          {fieldError(["academics", i, "to_date"]) && (
+                            <p className="text-xs text-destructive">
+                              {fieldError(["academics", i, "to_date"])}
                             </p>
                           )}
                         </div>
@@ -761,11 +867,24 @@ const CVForm = () => {
                         <div className="space-y-2">
                           <Label>Cumulative GPA/Grade</Label>
                           <Input
-                            value={a.gpa || ""}
+                            value={gpaDrafts[i] ?? (Number.isFinite(a.gpa) ? String(a.gpa) : "")}
                             className={fieldClass(["academics", i, "gpa"])}
-                            onChange={(e) => updateAcademic(i, "gpa", e.target.value)}
-                            onBlur={() => validateField(["academics", i, "gpa"])}
-                            placeholder={isBE ? "e.g., 3.8" : "e.g., 85% or A1"}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              // Allow intermediate decimal typing states like "3." without breaking input UX.
+                              if (!/^\d*\.?\d*$/.test(raw)) return;
+                              setGpaDrafts((prev) => ({ ...prev, [i]: raw }));
+                              updateAcademic(i, "gpa", raw === "" || raw === "." ? Number.NaN : Number(raw));
+                            }}
+                            onBlur={() => {
+                              setGpaDrafts((prev) => {
+                                const next = { ...prev };
+                                delete next[i];
+                                return next;
+                              });
+                              validateField(["academics", i, "gpa"]);
+                            }}
+                            placeholder="e.g., 3, 3.5 or 80 if 80%"
                           />
                           {fieldError(["academics", i, "gpa"]) && (
                             <p className="text-xs text-destructive">
@@ -775,7 +894,7 @@ const CVForm = () => {
                         </div>
 
                         <div className="space-y-2 md:col-span-2">
-                          <Label>Major Subjects</Label>
+                          <Label>Discipline</Label>
                           <Input
                             value={a.majors || ""}
                             className={fieldClass(["academics", i, "majors"])}
@@ -823,6 +942,24 @@ const CVForm = () => {
                       <div className="space-y-2"><Label>Organization</Label><Input value={intern.organization} onChange={e => updateInternship(i, 'organization', e.target.value)} /></div>
                       <div className="space-y-2"><Label>Position</Label><Input value={intern.position} onChange={e => updateInternship(i, 'position', e.target.value)} /></div>
                       <div className="space-y-2"><Label>Field</Label><Input value={intern.field} onChange={e => updateInternship(i, 'field', e.target.value)} /></div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Duties (one per line)</Label>
+                        <Textarea
+                          value={(intern.duties || []).join('\n')}
+                          onChange={e => setCvData(prev => ({
+                            ...prev,
+                            internships: prev.internships.map((row, idx) =>
+                              idx === i
+                                ? {
+                                  ...row,
+                                    duties: e.target.value.split('\n'),
+                                  }
+                                : row
+                            ),
+                          }))}
+                          placeholder={"Increase ready-to-market time by 20%\nAutomated resource updates"}
+                        />
+                      </div>
                       <div className="space-y-2"><Label>From</Label><Input type="date" value={intern.from} onChange={e => updateInternship(i, 'from', e.target.value)} /></div>
                       <div className="space-y-2"><Label>To</Label><Input type="date" value={intern.to} onChange={e => updateInternship(i, 'to', e.target.value)} /></div>
                     </div>
@@ -895,7 +1032,7 @@ const CVForm = () => {
                           <Label>Date</Label>
                           <Input
                             value={visit.date || ""}
-                            placeholder="e.g., Oct 2023"
+                            placeholder="e.g., Oct, 2023"
                             className={fieldClass(["industrialVisits", i, "date"])}
                             onChange={(e) => updateListItem("industrialVisits", i, "date", e.target.value)}
                             onBlur={() => validateField(["industrialVisits", i, "date"])}
