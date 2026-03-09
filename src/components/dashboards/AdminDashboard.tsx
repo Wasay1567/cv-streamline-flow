@@ -651,7 +651,6 @@ const AdminDashboard = () => {
       </Tabs>
 
       <CVViewDialog submission={selectedCV} onClose={() => setSelectedCV(null)} />
-
       {/* Role Change Dialog */}
       <Dialog open={!!roleDialog} onOpenChange={() => setRoleDialog(null)}>
         <DialogContent>

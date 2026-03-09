@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusBadge from '@/components/StatusBadge';
-import type { CVSubmission } from '@/types/cv';
+import CVViewDialog from '@/components/CVViewDialog';
+import type { CVSubmission, CVData, CVStatus } from '@/types/cv';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -43,11 +44,102 @@ const normalizeAdvisorSubmission = (item: unknown): AdvisorSubmissionRow | null 
   };
 };
 
+const toStringArray = (value: unknown, key: string): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object') {
+        const v = (item as Record<string, unknown>)[key];
+        return typeof v === 'string' ? v : '';
+      }
+      return '';
+    })
+    .filter(Boolean);
+};
+
+const mapApiCvDataToFrontend = (row: Record<string, unknown>): CVData => {
+  const personal = (row.personal_info as Record<string, unknown> | undefined) || {};
+  const internships = Array.isArray(row.internships) ? (row.internships as Record<string, unknown>[]) : [];
+  const visits = Array.isArray(row.industrial_visits) ? (row.industrial_visits as Record<string, unknown>[]) : [];
+  const academics = Array.isArray(row.academics) ? (row.academics as Record<string, unknown>[]) : [];
+
+  return {
+    student_image: String(row.student_image ?? row.student_image_url ?? ''),
+    personalInfo: {
+      name: String(personal.name ?? ''),
+      fatherName: String(personal.father_name ?? ''),
+      department: String(personal.department ?? ''),
+      batch: String(personal.batch ?? ''),
+      cell: String(personal.cell ?? ''),
+      rollNo: String(personal.roll_no ?? ''),
+      cnic: String(personal.cnic ?? ''),
+      email: String(personal.email ?? ''),
+      gender: String(personal.gender ?? 'Male') as 'Male' | 'Female' | 'Other',
+      dob: String(personal.dob ?? ''),
+      address: String(personal.address ?? ''),
+    },
+    academics: academics.map((a) => ({
+      degree: String(a.degree ?? ''),
+      university: String(a.university ?? ''),
+      year: String(a.year ?? ''),
+      gpa: String(a.gpa ?? ''),
+      majors: String(a.majors ?? ''),
+    })),
+    fyp: {
+      title: String((row.fyp as Record<string, unknown> | undefined)?.title ?? ''),
+      company: String((row.fyp as Record<string, unknown> | undefined)?.company ?? ''),
+      objectives: String((row.fyp as Record<string, unknown> | undefined)?.objectives ?? ''),
+    },
+    careerCounseling: Boolean(row.career_counseling),
+    internships: internships.map((i) => ({
+      organization: String(i.organization ?? ''),
+      position: String(i.position ?? ''),
+      field: String(i.field ?? ''),
+      from: String(i.from_date ?? i.from ?? ''),
+      to: String(i.to_date ?? i.to ?? ''),
+    })),
+    industrialVisits: visits.map((v) => ({
+      organization: String(v.organization ?? ''),
+      purpose: String(v.purpose ?? ''),
+      date: String(v.visit_date ?? v.date ?? ''),
+    })),
+    certificates: toStringArray(row.certificates, 'name'),
+    achievements: toStringArray(row.achievements, 'description'),
+    skills: toStringArray(row.skills, 'name'),
+    extraCurricular: toStringArray(row.extra_curricular, 'activity'),
+    references: Array.isArray(row.references)
+      ? (row.references as Record<string, unknown>[]).map((r) => ({
+          name: String(r.name ?? ''),
+          contact: String(r.contact ?? ''),
+          occupation: String(r.occupation ?? ''),
+          relation: String(r.relation ?? ''),
+        }))
+      : [],
+  };
+};
+
+const normalizeCvDetails = (input: unknown): CVSubmission | null => {
+  if (!input || typeof input !== 'object') return null;
+  const row = input as Record<string, unknown>;
+  const id = String(row.cv_id ?? row.id ?? '');
+  if (!id) return null;
+
+  return {
+    id,
+    student_id: String(row.student_id ?? ''),
+    status: String(row.status ?? row.cv_status ?? 'not_submitted') as CVStatus,
+    cv_data: mapApiCvDataToFrontend(row),
+    rejection_comment: String(row.rejection_comment ?? ''),
+    submitted_at: (row.submitted_at ?? row.created_at ?? null) as string | null,
+    updated_at: String(row.updated_at ?? ''),
+  };
+};
+
 const AdvisorDashboard = () => {
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<AdvisorSubmissionRow[]>([]);
-  const [selectedCVId, setSelectedCVId] = useState<string | null>(null);
-  const [selectedCVDetails, setSelectedCVDetails] = useState<CVSubmission | null>(null);
+  const [selectedCV, setSelectedCV] = useState<CVSubmission | null>(null);
   const [loading, setLoading] = useState(true);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState('');
@@ -83,8 +175,8 @@ const AdvisorDashboard = () => {
   const handleViewCV = async (cvId: string) => {
     try {
       const details = await backend.getCV(cvId);
-      setSelectedCVDetails(details);
-      setSelectedCVId(cvId);
+      const normalized = normalizeCvDetails(details);
+      setSelectedCV(normalized || null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load CV details';
       toast({
@@ -248,40 +340,7 @@ const AdvisorDashboard = () => {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={!!selectedCVId} onOpenChange={() => setSelectedCVId(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>CV Details</DialogTitle>
-          </DialogHeader>
-          {selectedCVDetails && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Student Email</p>
-                  <p className="text-sm">{(selectedCVDetails as any).student_email || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Status</p>
-                  <StatusBadge status={(selectedCVDetails as any).status as any} />
-                </div>
-              </div>
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-2">Full CV Data</h3>
-                <div className="space-y-3">
-                  {Object.entries(selectedCVDetails).map(([key, value]) => (
-                    <div key={key} className="border-b pb-2 last:border-b-0">
-                      <p className="text-xs font-medium text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</p>
-                      <p className="text-sm break-words whitespace-pre-wrap">
-                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value) || 'N/A'}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <CVViewDialog submission={selectedCV} onClose={() => setSelectedCV(null)}/>
 
       <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
         <DialogContent>

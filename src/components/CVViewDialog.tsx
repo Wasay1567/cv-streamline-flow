@@ -9,6 +9,12 @@ interface Props {
 const CVViewDialog = ({ submission, onClose }: Props) => {
   if (!submission) return null;
   const cv = (submission.cv_data ?? {}) as Partial<CVData>;
+  const studentImageUrl = cv?.student_image || (submission as unknown as { student_image?: string }).student_image || '';
+  const driveFileIdMatch = studentImageUrl.match(/[?&]id=([a-zA-Z0-9_-]{20,})|\/d\/([a-zA-Z0-9_-]{20,})/);
+  const driveFileId = driveFileIdMatch?.[1] || driveFileIdMatch?.[2] || '';
+  const embeddableImageUrl = driveFileId
+    ? `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w1000`
+    : studentImageUrl;
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div className="space-y-2">
@@ -29,6 +35,34 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader><DialogTitle>CV Details</DialogTitle></DialogHeader>
         <div className="space-y-6">
+          <Section title="Student Photo">
+            {studentImageUrl ? (
+              <div className="space-y-2">
+                <img
+                  src={embeddableImageUrl}
+                  alt="Student"
+                  className="h-32 w-32 rounded-md border object-cover"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (img.src !== studentImageUrl) {
+                      img.src = studentImageUrl;
+                    }
+                  }}
+                />
+                {/* <a
+                  href={studentImageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary underline"
+                >
+                  Open image in new tab
+                </a> */}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No image uploaded.</p>
+            )}
+          </Section>
+
           <Section title="Personal Information">
             <Field label="Name" value={cv?.personalInfo?.name || ''} />
             <Field label="Father's Name" value={cv?.personalInfo?.fatherName || ''} />
