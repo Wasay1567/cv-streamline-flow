@@ -33,7 +33,7 @@ export const cvSchema = z.object({
       gpa: z.coerce
         .number()
         .refine((value) => Number.isFinite(value), "GPA must be a valid number"),
-      majors: z.string().min(2, "Major is Required"),
+  majors: z.string().min(2, "Major is Required"),
     })
   ),
 

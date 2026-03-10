@@ -207,7 +207,7 @@ const AdminDashboard = () => {
         body: notifyBody,
         deadline: notifyDeadline || undefined,
       });
-      toast({ title: 'Notifications sent!', description: `Emailed all students.` });
+      toast({ title: 'Notifications sent!', description: `Emailed ${data.notified_count} students.` });
       setNotifyDialog(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send notifications';

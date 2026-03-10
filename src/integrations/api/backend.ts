@@ -28,7 +28,7 @@ export interface BulkNotifyPayload {
 }
 
 export interface BulkNotifyResult {
-  sent: number;
+  notified_count: number;
 }
 
 export interface PendingAdvisor {
