@@ -895,13 +895,31 @@ const CVForm = () => {
 
                         <div className="space-y-2 md:col-span-2">
                           <Label>Discipline</Label>
-                          <Input
-                            value={a.majors || ""}
-                            className={fieldClass(["academics", i, "majors"])}
-                            onChange={(e) => updateAcademic(i, "majors", e.target.value)}
-                            onBlur={() => validateField(["academics", i, "majors"])}
-                            placeholder={isBE ? "Mechanical Engineering" : "Pre-Engineering / Science"}
-                          />
+                          {isBE ? (
+                            <Select value={a.majors || ""} onValueChange={(value) => {
+                              updateAcademic(i, "majors", value);
+                              validateField(["academics", i, "majors"]);
+                            }}>
+                              <SelectTrigger className={fieldClass(["academics", i, "majors"])}>
+                                <SelectValue placeholder="Select a discipline" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DEPARTMENTS.map((dept) => (
+                                  <SelectItem key={dept} value={dept}>
+                                    {dept}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              value={a.majors || ""}
+                              className={fieldClass(["academics", i, "majors"])}
+                              onChange={(e) => updateAcademic(i, "majors", e.target.value)}
+                              onBlur={() => validateField(["academics", i, "majors"])}
+                              placeholder="Pre-Engineering / Science"
+                            />
+                          )}
                           {fieldError(["academics", i, "majors"]) && (
                             <p className="text-xs text-destructive">
                               {fieldError(["academics", i, "majors"])}
