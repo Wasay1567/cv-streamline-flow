@@ -16,7 +16,104 @@ import { DEPARTMENTS, BATCHES, cvSchema, emptyCVData } from '@/types/cv';
 import type { CVData, AcademicRecord, Internship, Reference, CVSubmission } from '@/types/cv';
 import { Plus, Trash2, ChevronLeft, ChevronRight, Save, Send } from 'lucide-react';
 
-const STEPS = ['Personal Info', 'Academics', 'FYP Details', 'Career Counseling', 'Internships', 'Industrial Visits', 'Certificates & Achievements', 'Skills', 'Extra-Curricular', 'References'];
+/*
+const DIMENSION_MAPPING = [
+  // Big Five Dimensions
+  { name: "Openness", questions: [1, 2, 3] },
+  { name: "Conscientiousness", questions: [4, 5, 6] },
+  { name: "Extraversion", questions: [7, 8, 9] },
+  { name: "Agreeableness", questions: [10, 11, 12] },
+  { name: "Emotional Stability", questions: [13, 14, 15] },
+  // Industry-Oriented Dimensions
+  { name: "Leadership", questions: [16, 17, 18] },
+  { name: "Analytical Thinking", questions: [19, 20, 21] },
+  { name: "Problem Solving", questions: [22, 23, 24] },
+  { name: "Learning Agility", questions: [25, 26, 27] },
+  { name: "Digital Adaptability", questions: [28, 29, 30] },
+  { name: "Ethical Integrity", questions: [31, 32, 33] },
+  { name: "Initiative & Ownership", questions: [34, 35, 36] },
+  { name: "Team Collaboration", questions: [37, 38, 39] },
+];
+*/
+
+const ASSESSMENT_SECTIONS = [
+  {
+    title: "Big Five Personality Dimensions",
+    questions: [
+      { id: 1, text: "I enjoy exploring new ideas and innovative solutions." },
+      { id: 2, text: "I am comfortable learning new technologies and systems." },
+      { id: 3, text: "I adapt quickly to changing environments and expectations." },
+      { id: 4, text: "I complete tasks on time and meet deadlines consistently." },
+      { id: 5, text: "I plan my work systematically before execution." },
+      { id: 6, text: "I pay attention to details in technical or academic work." },
+      { id: 7, text: "I feel confident speaking in front of groups." },
+      { id: 8, text: "I actively participate in teamwork and discussions." },
+      { id: 9, text: "I build professional relationships easily." },
+      { id: 10, text: "I cooperate effectively in team-based projects." },
+      { id: 11, text: "I respect diverse opinions and viewpoints." },
+      { id: 12, text: "I handle conflicts in a constructive manner." },
+      { id: 13, text: "I remain calm under academic or professional pressure." },
+      { id: 14, text: "I recover quickly from setbacks or failures." },
+      { id: 15, text: "I manage stress effectively during deadlines or exams." },
+    ]
+  },
+  {
+    title: "Industry-oriented Professional Dimensions",
+    questions: [
+      { id: 16, text: "I take initiative in academic or project activities." },
+      { id: 17, text: "I am comfortable guiding or coordinating team members." },
+      { id: 18, text: "I take responsibility for the outcomes of group tasks." },
+      { id: 19, text: "I analyze problems logically before proposing solutions." },
+      { id: 20, text: "I evaluate multiple alternatives before decision-making." },
+      { id: 21, text: "I interpret technical data effectively." },
+      { id: 22, text: "I can independently resolve technical challenges." },
+      { id: 23, text: "I apply theoretical knowledge to practical situations." },
+      { id: 24, text: "I persist until I find workable solutions." },
+      { id: 25, text: "I quickly understand new tools, software, or processes." },
+      { id: 26, text: "I seek feedback to improve my performance." },
+      { id: 27, text: "I continuously upgrade my skills." },
+      { id: 28, text: "I am comfortable using digital collaboration platforms." },
+      { id: 29, text: "I adapt easily to emerging technologies." },
+      { id: 30, text: "I use data and digital tools to improve efficiency." },
+      { id: 31, text: "I maintain honesty in academic and professional work." },
+      { id: 32, text: "I follow institutional and professional guidelines." },
+      { id: 33, text: "I take responsibility for my mistakes." },
+      { id: 34, text: "I proactively take responsibility for tasks without waiting for instructions." },
+      { id: 35, text: "I take ownership of outcomes, including both successes and failures." },
+      { id: 36, text: "I go beyond assigned work to add value to projects or teams." },
+      { id: 37, text: "I actively contribute to team discussions and shared goals." },
+      { id: 38, text: "I support team members to achieve collective success." },
+      { id: 39, text: "I communicate effectively to ensure smooth coordination within a team." },
+    ]
+  }
+];
+
+
+
+const [assessmentAnswers, setAssessmentAnswers] = useState<Record<number, number>>({});
+
+//const [dimensionScores, setDimensionScores] = useState<Array<{ name: string, average: number }>>([]);
+
+/*
+const calculateDimensionAverages = () => {
+  const scores = DIMENSION_MAPPING.map(dimension => {
+    const sum = dimension.questions.reduce((acc, qId) => {
+      return acc + (assessmentAnswers[qId] || 0);
+    }, 0);
+    
+    const average = parseFloat((sum / dimension.questions.length).toFixed(2));
+    
+    return {
+      name: dimension.name,
+      average: average
+    };
+  });
+
+  setDimensionScores(scores);
+  console.log("Classified Averages:", scores);
+};*/
+
+const STEPS = ['Personal Info', 'Academics', 'FYP Details', 'Career Counseling', 'Internships', 'Industrial Visits', 'Certificates & Achievements', 'Skills', 'Extra-Curricular', 'References', 'Assessment'];
 type FieldPath = Array<string | number>; // A path to a field in the CV data, e.g. ['personalInfo', 'name'] or ['academics', 0, 'degree']
 type ListKey = 'industrialVisits' | 'certificates' | 'achievements' | 'skills' | 'extraCurricular'; // Keys in CVData that represent lists of strings or objects with string fields
 const pathKey = (path: FieldPath) => path.map(String).join('.'); // Converts a field path to a string key for tracking touched fields and errors, e.g. ['personalInfo', 'name'] -> 'personalInfo.name'
@@ -210,6 +307,21 @@ const CVForm = () => {
   const mapBackendCVToFrontend = (raw: unknown): Partial<CVData> => {
     if (!raw || typeof raw !== 'object') return {};
     const data = raw as Record<string, unknown>;
+
+    const assessmentAnswersObj: Record<number, number> = {};
+
+  // 2. Safely extract and loop through the backend array
+    const rawAssessment = Array.isArray(data.assessmentAnswers) 
+      ? data.assessmentAnswers 
+      : [];
+
+    rawAssessment.forEach((item: any) => {
+      // Ensure we are mapping the backend keys (questionId/score) correctly
+      if (item && item.questionId) {
+        assessmentAnswersObj[Number(item.questionId)] = Number(item.score);
+      }
+    });
+
     const personal = (data.personal_info ?? data.personalInfo) as Record<string, unknown> | null;
     const academics = Array.isArray(data.academics) ? (data.academics as Record<string, unknown>[]) : [];
     const internships = Array.isArray(data.internships) ? (data.internships as Record<string, unknown>[]) : [];
@@ -266,6 +378,7 @@ const CVForm = () => {
       achievements: toStringArray(data.achievements, 'description'),
       skills: toStringArray(data.skills, 'name'),
       extraCurricular: toStringArray(data.extra_curricular ?? data.extraCurricular, 'activity'),
+      assessmentAnswers: assessmentAnswersObj,
       references: Array.isArray(data.references) ? (data.references as CVData['references']) : undefined,
     };
   };
@@ -321,6 +434,10 @@ const CVForm = () => {
     achievements: data.achievements,
     skills: data.skills,
     extraCurricular: data.extraCurricular,
+    assessmentAnswers: Object.entries(assessmentAnswers).map(([qId, score]) => ({
+      questionId: parseInt(qId),
+      score: score
+    })),
     references: data.references.map((r) => ({
       name: r.name,
       contact: r.contact,
@@ -1082,6 +1199,45 @@ const CVForm = () => {
                   </div>
                 ))}
                 <Button type="button" variant="outline" onClick={addReference} className="gap-1"><Plus className="h-4 w-4" /> Add Reference</Button>
+              </div>
+            )}
+
+            {step === 10 && (
+              <div className="space-y-10">
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                  <h3 className="text-blue-800 font-semibold">Personality Competency Assessment</h3>
+                  <p className="text-blue-600 text-sm italic">Please rate yourself from 1 (Strongly Disagree) to 5 (Strongly Agree)</p>
+                </div>
+
+                {/* Using the constant defined at the top of the file */}
+                {ASSESSMENT_SECTIONS.map((section, sIdx) => (
+                  <div key={sIdx} className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">{section.title}</h3>
+                    <div className="divide-y divide-gray-100">
+                      {section.questions.map((q) => (
+                        <div key={q.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <span className="text-gray-700 flex-1 text-sm md:text-base">{q.id}. {q.text}</span>
+                          <div className="flex items-center gap-3">
+                            {[1, 2, 3, 4, 5].map((val) => (
+                              <label key={val} className="flex flex-col items-center cursor-pointer group">
+                                <input
+                                  type="radio"
+                                  name={`q-${q.id}`}
+                                  required
+                                  value={val}
+                                  checked={assessmentAnswers[q.id] === val}
+                                  onChange={() => setAssessmentAnswers(prev => ({ ...prev, [q.id]: val }))}
+                                  className="w-5 h-5 cursor-pointer accent-blue-600"
+                                />
+                                <span className="text-xs mt-1 text-gray-400 group-hover:text-blue-600 font-medium">{val}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
