@@ -137,4 +137,8 @@ export const backend = {
   bulkNotifyStudents(payload: BulkNotifyPayload) {
     return api.post<BulkNotifyResult>("/admin/students/notify-missing-cv", payload);
   },
+
+  downloadCVs(cvIds: string[]) {
+    return api.post<ArrayBuffer>("/download-cv", { cv_ids: cvIds }, { responseType: 'arraybuffer' });
+  }
 };

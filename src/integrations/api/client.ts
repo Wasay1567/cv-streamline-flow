@@ -1,8 +1,8 @@
 export interface ApiOptions {
   token?: string;
+  responseType?: 'json' | 'arraybuffer' | 'blob' | 'text';
 }
 
-const SESSION_STORAGE_KEY = "auth_session";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
@@ -68,13 +68,24 @@ async function request<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const rawText = await response.text();
+  const responseType = options.responseType || 'json';
+  
   let data: unknown = null;
-  if (rawText) {
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      data = rawText;
+  
+  if (responseType === 'arraybuffer') {
+    data = await response.arrayBuffer();
+  } else if (responseType === 'blob') {
+    data = await response.blob();
+  } else if (responseType === 'text') {
+    data = await response.text();
+  } else {
+    const rawText = await response.text();
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = rawText;
+      }
     }
   }
 

@@ -12,7 +12,7 @@ import CVViewDialog from '@/components/CVViewDialog';
 import type { CVSubmission, CVStatus, CVData, Profile } from '@/types/cv';
 import { DEPARTMENTS, BATCHES } from '@/types/cv';
 import { useToast } from '@/hooks/use-toast';
-import { Users, CheckCircle, BarChart3, Mail, Filter, X } from 'lucide-react';
+import { Users, CheckCircle, BarChart3, Mail, Filter, X, HardDriveDownload } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -134,6 +134,7 @@ const AdminDashboard = () => {
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [batchFilter, setBatchFilter] = useState<string>('all');
   const [skillSearch, setSkillSearch] = useState('');
+  const [emailSearch, setEmailSearch] = useState('');
   const [minInternships, setMinInternships] = useState('');
   const [sortByCGPA, setSortByCGPA] = useState(false);
 
@@ -143,6 +144,9 @@ const AdminDashboard = () => {
   const [notifyBody, setNotifyBody] = useState('Dear Student,\n\nThis is a reminder to submit your CV as soon as possible.\n\nRegards,\nDIL Admin');
   const [notifyDeadline, setNotifyDeadline] = useState('');
   const [notifySending, setNotifySending] = useState(false);
+
+  //download loading
+  const [downloading, setDownloading] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -216,6 +220,47 @@ const AdminDashboard = () => {
     setNotifySending(false);
   };
 
+  const handleDownloadCVs = async () => {
+    if (approvedFilteredCVs.length === 0) {
+      toast({
+        title: 'No approved CVs',
+        description: 'Please filter to show at least one approved CV before downloading.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      const data = await backend.downloadCVs(cvIdsToDownload);
+      // Handle zip file download
+      const blob = new Blob([data as ArrayBuffer], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cv_submissions_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: 'Download started',
+        description: `Downloading ${approvedFilteredCVs.length} approved CV(s)...`,
+      });
+      console.log(`Initiated download for CV IDs: ${cvIdsToDownload.join(', ')}`);
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to download CVs';
+      toast({
+        title: 'Error downloading CVs',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleApproveAdvisor = async (advisorId: string) => {
     try {
       await backend.approveAdvisor(advisorId);
@@ -256,6 +301,7 @@ const AdminDashboard = () => {
     const cv = sub.cv_data as CVData;
     if (deptFilter !== 'all' && profile?.department !== deptFilter) return false;
     if (batchFilter !== 'all' && profile?.batch !== batchFilter) return false;
+    if (emailSearch && !profile?.email?.toLowerCase().includes(emailSearch.toLowerCase())) return false;
     if (skillSearch) {
       const skills = cv?.skills || [];
       if (!skills.some(s => s.toLowerCase().includes(skillSearch.toLowerCase()))) return false;
@@ -276,6 +322,10 @@ const AdminDashboard = () => {
     return 0;
   });
 
+  // Get approved CVs from filtered results
+  const approvedFilteredCVs = filteredCVs.filter(sub => sub.status === 'approved');
+  const cvIdsToDownload = approvedFilteredCVs.map(sub => sub.id);
+
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>;
 
   return (
@@ -285,9 +335,20 @@ const AdminDashboard = () => {
           <h1 className="text-3xl font-bold tracking-tight">DIL Admin Dashboard</h1>
           <p className="text-muted-foreground">Global overview and management</p>
         </div>
-        <Button onClick={() => setNotifyDialog(true)} className="gap-2">
-          <Mail className="h-4 w-4" /> Bulk Notify Students
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleDownloadCVs}
+            disabled={approvedFilteredCVs.length === 0 || downloading}
+            className="gap-2"
+            title={approvedFilteredCVs.length === 0 ? 'Filter for at least one approved CV to enable download' : ''}
+          >
+            <HardDriveDownload className="h-4 w-4" />
+            {downloading ? 'Downloading...' : `Download CV(s) (${approvedFilteredCVs.length})`}
+          </Button>
+          <Button onClick={() => setNotifyDialog(true)} className="gap-2">
+            <Mail className="h-4 w-4" /> Bulk Notify Students
+          </Button>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -344,7 +405,11 @@ const AdminDashboard = () => {
               <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Advanced Filters</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 md:grid-cols-5">
+              <div className="grid gap-3 md:grid-cols-6">
+                <div className="space-y-1">
+                  <Label className="text-xs">Student Email</Label>
+                  <Input placeholder="search@email.com" value={emailSearch} onChange={e => setEmailSearch(e.target.value)} />
+                </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Department</Label>
                   <Select value={deptFilter} onValueChange={setDeptFilter}>
@@ -376,12 +441,12 @@ const AdminDashboard = () => {
                 <div className="space-y-1 flex items-end">
                   <div className="flex items-center gap-2">
                     <Checkbox id="sort-cgpa" checked={sortByCGPA} onCheckedChange={(checked) => setSortByCGPA(checked as boolean)} />
-                    <Label htmlFor="sort-cgpa" className="text-xs cursor-pointer">Sort by CGPA â†“</Label>
+                    <Label htmlFor="sort-cgpa" className="text-xs cursor-pointer">Sort by CGPA</Label>
                   </div>
                 </div>
               </div>
-              {(deptFilter !== 'all' || batchFilter !== 'all' || skillSearch || minInternships || sortByCGPA) && (
-                <Button variant="ghost" size="sm" className="mt-2 gap-1" onClick={() => { setDeptFilter('all'); setBatchFilter('all'); setSkillSearch(''); setMinInternships(''); setSortByCGPA(false); }}>
+              {(deptFilter !== 'all' || batchFilter !== 'all' || emailSearch || skillSearch || minInternships || sortByCGPA) && (
+                <Button variant="ghost" size="sm" className="mt-2 gap-1" onClick={() => { setDeptFilter('all'); setBatchFilter('all'); setEmailSearch(''); setSkillSearch(''); setMinInternships(''); setSortByCGPA(false); }}>
                   <X className="h-3 w-3" /> Clear Filters
                 </Button>
               )}
