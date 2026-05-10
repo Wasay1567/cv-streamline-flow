@@ -45,6 +45,7 @@ export const cvSchema = z.object({
 
   careerCounseling: z.boolean(), //we can also use ENUM here for YES and NO
 
+
   internships: z.array(
     z.object({
       organization: z.string().trim().optional().or(z.literal('')),
@@ -67,6 +68,8 @@ export const cvSchema = z.object({
   achievements: z.array(z.string().trim()),
   skills: z.array(z.string().trim()),
   extraCurricular: z.array(z.string().trim()),
+  
+  assessmentAnswers: z.record(z.coerce.number(), z.coerce.number()).default({}),
 
   references: z.array(
     z.object({
@@ -232,6 +235,8 @@ export const emptyCVData: CVData = {
   },
   careerCounseling: false,
   // Your schema allows these to be empty arrays initially
+
+
   internships: [], 
   // Since you moved Industrial Visits to an object structure in the schema:
   industrialVisits: [], 
@@ -240,6 +245,9 @@ export const emptyCVData: CVData = {
   skills: [],
   extraCurricular: [],
   // References usually start with at least one empty contact card
+  
+  assessmentAnswers: {},
+
   references: [
     { name: '', contact: '', occupation: '', relation: '' }
   ],
