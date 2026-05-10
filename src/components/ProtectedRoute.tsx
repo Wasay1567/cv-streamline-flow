@@ -34,7 +34,7 @@ const ProtectedRoute = ({ children, allowedRoles, requireProfileSetup = true }: 
     }
     if (!allowedRoles.includes(role)) {
       // User has wrong role for this page
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to="/home" replace />;
     }
   }
 

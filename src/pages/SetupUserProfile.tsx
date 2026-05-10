@@ -35,7 +35,7 @@ export default function SetupUserProfile() {
 
   if (!isLoaded || authLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (profileSetupComplete || authRole === 'dil_admin') return <Navigate to="/dashboard" replace />;
+  if (profileSetupComplete || authRole === 'dil_admin') return <Navigate to="/home" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,8 +93,8 @@ export default function SetupUserProfile() {
         description: 'Your profile has been set up successfully.',
       });
 
-      navigate('/dashboard');
-      console.log("Profile setup complete, navigating to dashboard...");
+      navigate('/home');
+      console.log("Profile setup complete, navigating to home...");
 
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to set up profile';

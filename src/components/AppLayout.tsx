@@ -8,7 +8,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
 
   const navItems = [
-    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student', 'advisor', 'dil_admin'] },
+    { to: '/home', label: 'Home', icon: LayoutDashboard, roles: ['student', 'advisor', 'dil_admin'] },
     { to: '/cv-form', label: 'CV Form', icon: FileText, roles: ['student'] },
     { to: '/students', label: 'Students', icon: Users, roles: ['advisor', 'dil_admin'] },
     { to: '/admin', label: 'Admin', icon: Shield, roles: ['dil_admin'] },
@@ -25,9 +25,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link to="/dashboard" className="flex items-center gap-2 font-bold text-primary text-lg">
+            <Link to="/home" className="flex items-center gap-2 font-bold text-primary text-lg">
               <FileText className="h-5 w-5" />
-              CV Automation
+              Digital CV Repository Portal
             </Link>
             <nav className="hidden md:flex items-center gap-1">
               {filtered.map(item => (

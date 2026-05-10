@@ -13,13 +13,13 @@ const Login = () => {
 
   if (loading || !isLoaded) return null;
   if (user) {
-    const nextPath = !profileSetupComplete && role !== 'dil_admin' ? '/setup-profile' : '/dashboard';
+    const nextPath = !profileSetupComplete && role !== 'dil_admin' ? '/setup-profile' : '/home';
     return <Navigate to={nextPath} replace />;
   }
 
   const handleDevLogin = (role: 'student' | 'advisor' | 'dil_admin') => {
     auth.signInAsDevRole(role);
-    window.location.assign(role === 'dil_admin' ? '/dashboard' : '/setup-profile');
+    window.location.assign(role === 'dil_admin' ? '/home' : '/setup-profile');
   };
 
   return (
@@ -35,7 +35,7 @@ const Login = () => {
                 card: 'rounded-lg border border-input bg-card shadow-sm',
               },
             }}
-            redirectUrl="/dashboard"
+            redirectUrl="/home"
           />
         </div>
 
