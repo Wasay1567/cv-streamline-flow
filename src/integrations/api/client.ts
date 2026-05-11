@@ -52,9 +52,13 @@ async function request<T>(
     options: ApiOptions = {} //additional options, e.g. { token: "..." }
   ): Promise<T> { 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     "ngrok-skip-browser-warning": "69420", // Bypass ngrok browser warning for API requests
   };
+
+  // Only set Content-Type for non-FormData requests
+  if (!(body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = options.token || await getClerkToken();
   if (token) {
@@ -65,7 +69,7 @@ async function request<T>(
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
   });
 
   const responseType = options.responseType || 'json';

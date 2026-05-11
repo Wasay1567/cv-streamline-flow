@@ -90,8 +90,6 @@ const ASSESSMENT_SECTIONS = [
 
 
 
-const [assessmentAnswers, setAssessmentAnswers] = useState<Record<number, number>>({});
-
 //const [dimensionScores, setDimensionScores] = useState<Array<{ name: string, average: number }>>([]);
 
 /*
@@ -175,6 +173,9 @@ const CVForm = () => {
   const [gpaDrafts, setGpaDrafts] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [assessmentAnswers, setAssessmentAnswers] = useState<Record<number, number>>({});
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
 
   const asSubmission = (value: unknown): CVSubmission | null => {
     if (!value || typeof value !== 'object') return null;
@@ -310,14 +311,20 @@ const CVForm = () => {
 
     const assessmentAnswersObj: Record<number, number> = {};
 
-  // 2. Safely extract and loop through the backend array
+    // Handle both old format (assessmentAnswers with objects) and new format (assessment as array of IDs)
     const rawAssessment = Array.isArray(data.assessmentAnswers) 
       ? data.assessmentAnswers 
+      : Array.isArray(data.assessment)
+      ? data.assessment
       : [];
 
     rawAssessment.forEach((item: any) => {
-      // Ensure we are mapping the backend keys (questionId/score) correctly
-      if (item && item.questionId) {
+      if (typeof item === 'number') {
+        // New format: just question IDs - we'll need scores from somewhere else
+        // For now, mark as answered (we could check another field for scores)
+        assessmentAnswersObj[item] = 0; // Placeholder, will be updated if we get actual scores
+      } else if (item && item.questionId) {
+        // Old format: objects with questionId and score
         assessmentAnswersObj[Number(item.questionId)] = Number(item.score);
       }
     });
@@ -350,7 +357,7 @@ const CVForm = () => {
         degree: String(a.degree ?? ''),
         university: String(a.university ?? ''),
         from_date: toDateStringPreserve(a.from_date ?? a.from ?? ''),
-        to_date: toDateStringPreserve(a.to_date ?? a.to ?? ''),
+        to_date: toDateStringPreserve(a.to_date ?? a.to ?? a.year ?? ''),
         gpa: Number.isFinite(Number(a.gpa)) ? Number(a.gpa) : Number.NaN,
         majors: String(a.majors ?? ''),
       })),
@@ -384,15 +391,17 @@ const CVForm = () => {
   };
 
   const mapFrontendCVToBackend = (data: CVData) => ({
-    student_image: data.student_image,
-    careerCounseling: data.careerCounseling,
-    personalInfo: {
+    career_counseling: data.careerCounseling,
+    assessment: Object.keys(assessmentAnswers)
+      .map(qId => parseInt(qId))
+      .sort((a, b) => a - b),
+    personal_info: {
       name: data.personalInfo.name,
-      fatherName: data.personalInfo.fatherName,
+      father_name: data.personalInfo.fatherName,
       department: data.personalInfo.department,
       batch: data.personalInfo.batch,
       cell: data.personalInfo.cell,
-      rollNo: data.personalInfo.rollNo,
+      roll_no: data.personalInfo.rollNo,
       cnic: data.personalInfo.cnic,
       email: data.personalInfo.email,
       gender: data.personalInfo.gender,
@@ -402,8 +411,7 @@ const CVForm = () => {
     academics: data.academics.map((a) => ({
       degree: a.degree,
       university: a.university,
-      from_date: toDateStringPreserve(a.from_date),
-      to_date: toDateStringPreserve(a.to_date),
+      year: toDateStringPreserve(a.to_date).substring(0, 4) || '',
       gpa: Number.isFinite(a.gpa) ? String(a.gpa) : '',
       majors: a.majors,
     })),
@@ -417,7 +425,7 @@ const CVForm = () => {
         from_date: toDateStringPreserve(i.from) || null,
         to_date: toDateStringPreserve(i.to) || null,
       })),
-    industrialVisits: data.industrialVisits
+    industrial_visits: data.industrialVisits
       .map((v) => ({
         organization: (v.organization || '').trim(),
         purpose: (v.purpose || '').trim(),
@@ -430,20 +438,18 @@ const CVForm = () => {
       company: data.fyp.company,
       objectives: data.fyp.objectives,
     },
-    certificates: data.certificates,
-    achievements: data.achievements,
-    skills: data.skills,
-    extraCurricular: data.extraCurricular,
-    assessmentAnswers: Object.entries(assessmentAnswers).map(([qId, score]) => ({
-      questionId: parseInt(qId),
-      score: score
-    })),
-    references: data.references.map((r) => ({
-      name: r.name,
-      contact: r.contact,
-      occupation: r.occupation,
-      relation: r.relation,
-    })),
+    certificates: data.certificates.filter(Boolean).map(c => ({ name: c })),
+    achievements: data.achievements.filter(Boolean).map(a => ({ description: a })),
+    skills: data.skills.filter(Boolean).map(s => ({ name: s })),
+    extra_curricular: data.extraCurricular.filter(Boolean).map(e => ({ activity: e })),
+    references: data.references
+      .filter((r) => r.name || r.contact || r.occupation || r.relation)
+      .map((r) => ({
+        name: r.name,
+        contact: r.contact,
+        occupation: r.occupation,
+        relation: r.relation,
+      })),
   });
 
   useEffect(() => {
@@ -606,88 +612,27 @@ const CVForm = () => {
 
   // Handle photo upload - converts to Base64, sends to Google Apps Script, stores returned photo URL
   const handlePhotoUpload = async (file: File) => {
-    if (!user) {
-      toast({ title: 'Error', description: 'User not authenticated', variant: 'destructive' });
-      return;
-    }
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    toast({ title: 'Error', description: 'Please select a valid image file', variant: 'destructive' });
+    return;
+  }
 
-    if (!import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL) {
-      toast({ title: 'Error', description: 'Google Apps Script URL not configured', variant: 'destructive' });
-      console.error('VITE_GOOGLE_APPS_SCRIPT_URL is not set');
-      return;
-    }
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    toast({ title: 'Error', description: 'Image must be less than 5MB', variant: 'destructive' });
+    return;
+  }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast({ title: 'Error', description: 'Please select a valid image file', variant: 'destructive' });
-      return;
-    }
+  // 1. Save the actual binary File object to state so we can send it later
+  setImageFile(file);
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: 'Error', description: 'Image must be less than 5MB', variant: 'destructive' });
-      return;
-    }
+  // 2. Create a temporary local URL so the UI knows the photo is "uploaded"
+  const localPreviewUrl = URL.createObjectURL(file);
+  setCvData(prev => ({ ...prev, student_image: localPreviewUrl }));
 
-    setImageUploading(true);
-    try {
-      // Convert image to Base64
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const base64String = e.target?.result as string;
-          
-          if (!base64String) {
-            throw new Error('Failed to convert image to base64');
-          }
-          // Prepare filename with database UUID (not Clerk UUID)
-          const fileName = `${dbUserId || user.id}`;
-
-          // Send to Google Apps Script
-          const response = await fetch(import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({
-              action: "upload",
-              fileName: fileName,
-              base64Data: base64String,
-              mimeType: file.type,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const result = await response.json();
-
-          if (!result || !result.fileUrl) {
-            throw new Error(result?.error || 'Failed to upload image to Drive');
-          }
-
-          // Store uploaded photo URL inside cv_data.student_image
-          setCvData(prev => ({ ...prev, student_image: result.fileUrl }));
-
-          toast({ title: 'Success', description: 'Photo uploaded successfully' });
-          setImageUploading(false);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to upload photo';
-          toast({ title: 'Error', description: message, variant: 'destructive' });
-          setImageUploading(false);
-        }
-      };
-
-      reader.onerror = () => {
-        toast({ title: 'Error', description: 'Failed to read image file', variant: 'destructive' });
-        setImageUploading(false);
-      };
-
-      reader.readAsDataURL(file);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to upload photo';
-      toast({ title: 'Error', description: message, variant: 'destructive' });
-      setImageUploading(false);
-    }
-  };
+  toast({ title: 'Success', description: 'Photo attached successfully' });
+};
 
   
   const saveDraft = async () => {
@@ -715,27 +660,40 @@ const CVForm = () => {
   // 5. Role data is secured in Clerk (not localStorage)
 
   const submitCV = async () => {
-    if (!user) return;
-    console.log(cvData)
-    // Validate photo is uploaded
-    if (!cvData.student_image) {
-      toast({ title: 'Error', description: 'Please upload a photo to continue', variant: 'destructive' });
-      return;
-    }
+  if (!user) return;
+  
+  if (!cvData.student_image || (!imageFile && !existingId)) {
+    toast({ title: 'Error', description: 'Please upload a photo to continue', variant: 'destructive' });
+    return;
+  }
 
-    setSaving(true);
-    try {
-      const payload = mapFrontendCVToBackend(cvData);
-      console.log('[CVForm] submit payload', payload);
-      await backend.createCV(payload as unknown as CVData);
-      toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
-      navigate('/dashboard');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to submit CV';
-      toast({ title: 'Error', description: message, variant: 'destructive' });
+  setSaving(true);
+  try {
+    // 1. Generate your standard JSON payload with snake_case fields and assessment array
+    const jsonPayload = mapFrontendCVToBackend(cvData);
+
+    // 2. Create a new FormData object
+    const formData = new FormData();
+    
+    // 3. Append the binary image file
+    if (imageFile) {
+      formData.append('student_image', imageFile);
     }
-    setSaving(false);
-  };
+    
+    // 4. Append the JSON payload as 'data' field
+    formData.append('data', JSON.stringify(jsonPayload));
+
+    // 5. Send the FormData to your backend
+    await backend.createCV(formData as any); 
+    
+    toast({ title: 'CV submitted!', description: 'Your CV has been sent for advisor review.' });
+    navigate('/dashboard');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to submit CV';
+    toast({ title: 'Error', description: message, variant: 'destructive' });
+  }
+  setSaving(false);
+};
 
   
 
