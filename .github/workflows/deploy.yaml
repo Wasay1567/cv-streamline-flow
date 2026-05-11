@@ -1,0 +1,43 @@
+name: Deploy Frontend to S3 Root
+
+on:
+  push:
+    branches:
+      - main # Or your specific branch name
+  pull_request:
+    branches:
+      - main # Or your specific branch name
+    types:
+      - closed
+
+jobs:
+  deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_ENABLE_DEV_AUTH: ${{ secrets.VITE_ENABLE_DEV_AUTH }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+        
+        run: npm run build # This generates the local ./dist folder
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Double check your bucket's region!
+
+      - name: Sync Dist to S3 Root
+        # This command takes the CONTENT of ./dist and puts it at the root of S3.
+        # --delete ensures old files no longer in your 'dist' are removed from S3.
+        run: aws s3 sync ./dist/ s3://${{ secrets.AWS_S3_BUCKET }} --delete
