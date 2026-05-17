@@ -138,7 +138,7 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
           <DialogTitle>CV Details</DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
-          <Section title="Student Photo">
+          {/* <Section title="Student Photo">
             {studentImageUrl ? (
               <div className="space-y-2">
                 <img
@@ -156,7 +156,7 @@ const CVViewDialog = ({ submission, onClose }: Props) => {
             ) : (
               <p className="text-sm text-muted-foreground">No image uploaded.</p>
             )}
-          </Section>
+          </Section> */}
 
           <Section title="Personal Information">
             <Field label="Name" value={cv.personalInfo?.name || ''} />

@@ -273,7 +273,6 @@ const AdvisorDashboard = () => {
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="pending_advisor">Pending</TabsTrigger>
-          <TabsTrigger value="pending_dil">Forwarded</TabsTrigger>
           <TabsTrigger value="approved">Approved</TabsTrigger>
           <TabsTrigger value="rejected">Rejected</TabsTrigger>
         </TabsList>

@@ -176,6 +176,8 @@ const CVForm = () => {
   const [assessmentAnswers, setAssessmentAnswers] = useState<Record<number, number>>({});
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  const [isInitializing, setIsInitializing] = useState(true);
+
 
   const asSubmission = (value: unknown): CVSubmission | null => {
     if (!value || typeof value !== 'object') return null;
@@ -311,18 +313,18 @@ const CVForm = () => {
 
     const assessmentAnswersObj: Record<number, number> = {};
 
-    // Handle both old format (assessmentAnswers with objects) and new format (assessment as array of IDs)
+    // Handle both old format (assessmentAnswers with objects) and new format (assessment as array of scores)
     const rawAssessment = Array.isArray(data.assessmentAnswers) 
       ? data.assessmentAnswers 
       : Array.isArray(data.assessment)
       ? data.assessment
       : [];
 
-    rawAssessment.forEach((item: any) => {
-      if (typeof item === 'number') {
-        // New format: just question IDs - we'll need scores from somewhere else
-        // For now, mark as answered (we could check another field for scores)
-        assessmentAnswersObj[item] = 0; // Placeholder, will be updated if we get actual scores
+    rawAssessment.forEach((item: any, index: number) => {
+      if (typeof item === 'number' && !isNaN(item)) {
+        // New format: array of scores where index position = questionId - 1
+        // So index 0 = question 1, index 1 = question 2, etc.
+        assessmentAnswersObj[index + 1] = item;
       } else if (item && item.questionId) {
         // Old format: objects with questionId and score
         assessmentAnswersObj[Number(item.questionId)] = Number(item.score);
@@ -392,9 +394,9 @@ const CVForm = () => {
 
   const mapFrontendCVToBackend = (data: CVData) => ({
     career_counseling: data.careerCounseling,
-    assessment: Object.keys(assessmentAnswers)
-      .map(qId => parseInt(qId))
-      .sort((a, b) => a - b),
+    assessment: Object.entries(assessmentAnswers)
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .map(([, score]) => score),
     personal_info: {
       name: data.personalInfo.name,
       father_name: data.personalInfo.fatherName,
@@ -412,6 +414,8 @@ const CVForm = () => {
       degree: a.degree,
       university: a.university,
       year: toDateStringPreserve(a.to_date).substring(0, 4) || '',
+      from_date: toDateStringPreserve(a.from_date),
+      to_date: toDateStringPreserve(a.to_date),
       gpa: Number.isFinite(a.gpa) ? String(a.gpa) : '',
       majors: a.majors,
     })),
@@ -438,10 +442,10 @@ const CVForm = () => {
       company: data.fyp.company,
       objectives: data.fyp.objectives,
     },
-    certificates: data.certificates.filter(Boolean).map(c => ({ name: c })),
-    achievements: data.achievements.filter(Boolean).map(a => ({ description: a })),
-    skills: data.skills.filter(Boolean).map(s => ({ name: s })),
-    extra_curricular: data.extraCurricular.filter(Boolean).map(e => ({ activity: e })),
+    certificates: data.certificates.filter(Boolean),
+    achievements: data.achievements.filter(Boolean),
+    skills: data.skills.filter(Boolean),
+    extra_curricular: data.extraCurricular.filter(Boolean),
     references: data.references
       .filter((r) => r.name || r.contact || r.occupation || r.relation)
       .map((r) => ({
@@ -467,6 +471,7 @@ const CVForm = () => {
   useEffect(() => {
     if (!user) return;
     const loadExistingCV = async () => {
+      setIsInitializing(true); // <-- 1. Start loading
       try {
         let latest: CVSubmission | null = null;
         let latestId: string | null = null;
@@ -481,12 +486,10 @@ const CVForm = () => {
 
         if (!latest) {
           const single = await backend.getMySubmission();
-          // console.log("payload from backend: ",single)
           latest = pickLatestSubmission(single);
           latestId = latestId || pickLatestId(single);
         }
 
-        // /cv-submissions/me currently returns flattened summary rows; fetch full CV by id.
         if (!latest && latestId) {
           try {
             latest = await backend.getCV(latestId);
@@ -502,8 +505,13 @@ const CVForm = () => {
         const rawCvPayload = (latestRow.cv_data ?? latestRow) as unknown;
         const mapped = mapBackendCVToFrontend(rawCvPayload);
         setCvData(hydrateCVData(mapped));
+        if (mapped.assessmentAnswers) {
+          setAssessmentAnswers(mapped.assessmentAnswers);
+        }
       } catch (error) {
         console.error('Error fetching existing submission:', error);
+      } finally {
+        setIsInitializing(false); // <-- 2. Stop loading no matter what
       }
     };
 
@@ -694,18 +702,50 @@ const CVForm = () => {
   }
   setSaving(false);
 };
-
+  // Put this right above `const progress = ((step + 1) / STEPS.length) * 100;`
+  if (isInitializing) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-blue-900" />
+          <p className="text-slate-500 font-medium animate-pulse">Loading your info...</p>
+        </div>
+      </AppLayout>
+    );
+  }
   
-
   const progress = ((step + 1) / STEPS.length) * 100;
 
   let isFormValid = false;
+  let missingFields: string[] = [];
+  
   try {
-    isFormValid = cvData && cvData.personalInfo ? cvSchema.safeParse(cvData).success : false;
+    if (cvData && cvData.personalInfo) {
+      const result = cvSchema.safeParse(cvData);
+      isFormValid = result.success;
+      
+      if (!result.success) {
+        // Extract the exact field names that failed validation from Zod
+        const rawFields = result.error.issues.map(issue => String(issue.path[issue.path.length - 1]));
+        missingFields = Array.from(new Set(rawFields)); // Remove duplicates
+      }
+    }
   } catch (error) {
     console.error('Error validating form:', error);
     isFormValid = false;
   }
+
+  // A helper to make the variable names readable for the user
+  const formatFieldName = (field: string) => {
+    const names: Record<string, string> = {
+      name: "Name", fatherName: "Father's Name", department: "Department",
+      batch: "Batch", cell: "Cell", rollNo: "Roll No", cnic: "CNIC",
+      email: "Email", gender: "Gender", dob: "Date of Birth", address: "Address",
+      degree: "Degree", university: "University", from_date: "From Date", 
+      to_date: "To Date", gpa: "GPA", majors: "Discipline"
+    };
+    return names[field] || field;
+  };
 
   return (
     <AppLayout>
@@ -1251,10 +1291,14 @@ const CVForm = () => {
             </div>
 
             {/* The Helper Text - Only shows on the final step if form is invalid or photo not uploaded */}
+            {/* The Helper Text - Shows on the final step if form is invalid */}
             {step === STEPS.length - 1 && (!isFormValid || !cvData.student_image) && (
-              <span className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
-                {!cvData.student_image ? '*Please upload a photo to submit' : '*Please fill all required fields to submit'}
-              </span>
+              <div className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1 max-w-xs text-right mt-1">
+                {!cvData.student_image && <p>• Photo is missing</p>}
+                {!isFormValid && missingFields.length > 0 && (
+                  <p>• Missing required fields: {missingFields.map(formatFieldName).join(', ')}</p>
+                )}
+              </div>
             )}
           </div>
         </div>

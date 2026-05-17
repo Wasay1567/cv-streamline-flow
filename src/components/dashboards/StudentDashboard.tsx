@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { backend } from '@/integrations/api/backend';
@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge';
 import type { CVStatus } from '@/types/cv';
-import { FileText, Edit, Trash2 } from 'lucide-react';
+import { FileText, Edit, Clock, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface StudentSubmissionItem {
@@ -42,11 +42,10 @@ const normalizeMySubmission = (item: unknown): StudentSubmissionItem | null => {
 const StudentDashboard = () => {
   const { user, role } = useAuth();
   const { toast } = useToast();
-  const [submissions, setSubmissions] = useState<StudentSubmissionItem[]>([]);
+  const [submission, setSubmission] = useState<StudentSubmissionItem | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchMySubmissions = async () => {
+  const fetchMySubmission = async () => {
     if (!user || role !== 'student') {
       setLoading(false);
       return;
@@ -60,179 +59,124 @@ const StudentDashboard = () => {
         .map(normalizeMySubmission)
         .filter(Boolean) as StudentSubmissionItem[];
 
+      // Even though there is only one valid submission now, 
+      // we sort by date just in case the backend returns a legacy array, 
+      // and we strictly only care about the first (latest) one.
       normalized.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-      setSubmissions(normalized);
+      setSubmission(normalized[0] || null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load your submissions';
+      const message = error instanceof Error ? error.message : 'Failed to load your submission';
       toast({ title: 'Error', description: message, variant: 'destructive' });
-      setSubmissions([]);
+      setSubmission(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMySubmissions();
+    fetchMySubmission();
   }, [user, role]);
-
-  const latestSubmission = useMemo(() => submissions[0] || null, [submissions]);
-
-  const deleteImageFromDrive = async (studentImageUrl: string) => {
-    if (!studentImageUrl) return;
-    const GOOGLE_SCRIPT_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
-    if (!GOOGLE_SCRIPT_URL) return;
-
-    try {
-      // console.log('[StudentDashboard] deleteImageFromDrive input URL:', studentImageUrl);
-      const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'delete', fileUrl: studentImageUrl }),
-      });
-      const raw = await response.text();
-      // console.log('[StudentDashboard] deleteImageFromDrive raw response:', raw);
-    } catch (error) {
-      // console.error('Failed to delete image from Drive:', error);
-    }
-  };
-
-  
-
-  // console.log(submissions)
-  const handleDelete = async (submissionId: string) => {
-    if (!latestSubmission) return;
-    if (submissionId === latestSubmission.id) {
-      toast({ title: 'Not allowed', description: 'You cannot delete your latest submission.', variant: 'destructive' });
-      return;
-    }
-    
-
-    setDeletingId(submissionId);
-    try {
-      const row = submissions.find((s) => s.id === submissionId);
-      // console.log('[StudentDashboard] deleting row:', row);
-      let imageUrl = row?.studentImageUrl || null;
-
-      if (!imageUrl) {
-        try {
-          const details = await backend.getCV(submissionId);
-          // console.log('[StudentDashboard] getCV details for delete:', details);
-          imageUrl = details?.cv_data?.student_image || null;
-        } catch {
-          imageUrl = null;
-        }
-      }
-
-      // console.log('[StudentDashboard] resolved imageUrl before deleteCV:', imageUrl);
-      if (imageUrl) {
-        await deleteImageFromDrive(imageUrl);
-      }
-
-      await backend.deleteCV(submissionId);
-      toast({ title: 'Deleted', description: 'Submission deleted successfully.' });
-      await fetchMySubmissions();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete submission';
-      toast({ title: 'Error', description: message, variant: 'destructive' });
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Student Dashboard</h1>
-        <p className="text-muted-foreground">Manage your CV submissions</p>
+        <h1 className="text-3xl font-bold tracking-tight text-[#1e2a5e]">Student Dashboard</h1>
+        <p className="text-muted-foreground mt-1">Manage your CV submission and track its approval status.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Latest Submission
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* --- CURRENT CV STATUS CARD --- */}
+        <Card className="shadow-md border-slate-200">
+          <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+            <CardTitle className="flex items-center gap-2 text-xl text-slate-800">
+              <FileText className="h-5 w-5 text-blue-600" />
+              My CV Status
             </CardTitle>
-            <CardDescription>Current status of your most recent CV</CardDescription>
+            <CardDescription>The current state of your official profile</CardDescription>
           </CardHeader>
-          <CardContent>
-            {latestSubmission ? (
-              <div className="space-y-3">
-                <StatusBadge status={latestSubmission.status} />
-                {latestSubmission.submittedAt && (
-                  <p className="text-sm text-muted-foreground">
-                    Submitted: {new Date(latestSubmission.submittedAt).toLocaleDateString()}
+          <CardContent className="pt-6">
+            {submission ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-slate-500">Status:</span>
+                  <StatusBadge status={submission.status} />
+                </div>
+                {submission.updatedAt && (
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium text-slate-500">Last Updated:</span>{' '}
+                    {new Date(submission.updatedAt).toLocaleString()}
+                  </p>
+                )}
+                {submission.submittedAt && (
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium text-slate-500">Submitted On:</span>{' '}
+                    {new Date(submission.submittedAt).toLocaleDateString()}
                   </p>
                 )}
               </div>
             ) : (
-              <p className="text-muted-foreground">You haven't started your CV yet.</p>
+              <div className="py-4 text-center">
+                <p className="text-slate-500 mb-4">You haven't created your CV yet.</p>
+              </div>
             )}
+            
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <Link to="/cv-form">
+                <Button className="w-full gap-2 bg-[#1e2a5e] hover:bg-blue-900">
+                  <Edit className="h-4 w-4" />
+                  {submission ? 'Edit / Update CV' : 'Start Creating CV'}
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
 
-        {latestSubmission?.status === 'rejected' && latestSubmission.rejectionComment && (
-          <Card className="border-destructive/50">
-            <CardHeader>
-              <CardTitle className="text-destructive">Advisor Feedback</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">{latestSubmission.rejectionComment}</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* --- DEADLINE PLACEHOLDER CARD --- */}
+        <Card className="shadow-md border-slate-200 bg-slate-50/50">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-xl text-slate-800">
+              <Clock className="h-5 w-5 text-amber-600" />
+              Upcoming Deadline
+            </CardTitle>
+            <CardDescription>Submission timeline for your batch</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
+              <div className="p-3 bg-amber-100 text-amber-700 rounded-full">
+                <Clock className="w-8 h-8" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-700">Deadline TBA</p>
+                <p className="text-sm text-slate-500 mt-1 max-w-[250px]">
+                  The Directorate of Industrial Liaison has not yet announced the final submission deadline for your department.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Submissions</CardTitle>
-          <CardDescription>You can delete older submissions. Latest submission cannot be deleted.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {submissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No submissions found.</p>
-          ) : (
-            submissions.map((item) => {
-              const isLatest = latestSubmission?.id === item.id;
-              return (
-                <div key={item.id} className="flex items-center justify-between rounded-md border p-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Submission #{item.id.slice(0, 8)}</p>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={item.status} />
-                      <span className="text-xs text-muted-foreground">
-                        Updated: {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'}
-                      </span>
-                      {isLatest && <span className="text-xs text-primary font-medium">(Latest)</span>}
-                    </div>
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={isLatest || deletingId === item.id}
-                    onClick={() => handleDelete(item.id)}
-                    className="gap-1"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    {deletingId === item.id ? 'Deleting...' : 'Delete'}
-                  </Button>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="flex gap-3">
-        <Link to="/cv-form">
-          <Button className="gap-2">
-            <Edit className="h-4 w-4" />
-            {latestSubmission ? 'Edit CV' : 'Start CV'}
-          </Button>
-        </Link>
-      </div>
+      {/* --- ADVISOR FEEDBACK CARD (Conditionally Rendered) --- */}
+      {submission?.status === 'rejected' && submission.rejectionComment && (
+        <Card className="border-destructive/50 shadow-md bg-red-50/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-destructive flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              Revisions Required
+            </CardTitle>
+            <CardDescription className="text-red-900/70">
+              Your Class Advisor has requested changes to your CV
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-white p-4 rounded-md border border-red-100 text-slate-800 text-sm leading-relaxed shadow-sm">
+              {submission.rejectionComment}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
