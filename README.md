@@ -1,73 +1,104 @@
-# Welcome to your Lovable project
+# 🎓 DIL Digital CV Repository Portal
 
-## Project info
+> *"Collaborate, Innovate, Transform: Academia - Industry Partnerships!"*
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+The **Digital CV Repository Portal** is a centralized, API-driven platform engineered for the **Directorate of Industrial Liaison (DIL)** at NED University of Engineering & Technology. 
 
-## How can I edit this code?
+This system digitizes and automates the legacy CV collection process. It facilitates the creation of comprehensive graduate directories, ensures data accuracy through an advisor-approval pipeline, and enables seamless sharing with industry partners for job placement opportunities.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## ✨ System Architecture & Workflow
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+The platform operates on a strict three-tier digital pipeline with Role-Based Access Control (RBAC):
 
-Changes made via Lovable will be committed automatically to this repo.
+1. **🧑‍🎓 Students:** Build and submit their digital CVs via a dynamic, multi-step form. The system utilizes a "single-submission override" model to maintain a clean database containing only the most up-to-date profile for each student. Includes personal details, academic history, FYP details, and a built-in Personality Competency Assessment.
+2. **👨‍🏫 Class Advisors:** Act as the verification layer. Advisors have dedicated dashboards to review submitted CVs, request corrections, or approve them for the final placement pool.
+3. **⚙️ DIL Admins:** Manage system-wide configurations (e.g., submission deadlines, active batches, global maintenance toggles), monitor analytics, and export finalized CVs to share with prospective employers.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🚀 Key Features
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+* **Advanced Multi-Step CV Builder:** A highly responsive React form with Zod validation, draft saving, auto-fill capabilities for development, and real-time missing-field tracking.
+* **Competency Assessment Engine:** Built-in evaluation capturing both *Big Five Personality Dimensions* and *Industry-Oriented Professional Dimensions*.
+* **Secure Cloud Storage:** Direct binary image uploads (`multipart/form-data`) to **AWS S3**, utilizing secure delivery pipelines to protect Personally Identifiable Information (PII).
+* **Dynamic System Configurations:** Database-driven settings allowing Admins to control the platform without touching the codebase or triggering redeployments.
+* **Smart API Wrapper:** Custom fetching logic that intelligently detects and handles both standard JSON payloads and multipart form data without manual header configuration.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🛠️ Tech Stack
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+**Frontend**
+* React 18 (Vite)
+* TypeScript
+* Tailwind CSS & [shadcn/ui](https://ui.shadcn.com/)
+* React Router v6
+* Lucide React (Iconography)
 
-# Step 3: Install the necessary dependencies.
-npm i
+**Backend & Infrastructure**
+* Python / FastAPI
+* PostgreSQL (with SQLAlchemy & Alembic)
+* AWS EC2 (Hosting)
+* AWS S3 (Binary Storage)
+* Clerk (Authentication & Session Management)
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+---
+
+## 💻 Getting Started (Local Development)
+
+### Prerequisites
+* Node.js (v18 or higher)
+* npm or yarn
+
+### 1. Clone the repository
+```bash
+git clone [https://github.com/your-username/dil-cv-portal.git](https://github.com/your-username/dil-cv-portal.git)
+cd dil-cv-portal
 ```
 
-**Edit a file directly in GitHub**
+### 2. Install dependencies
+```bash
+npm install
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3. Environment Configuration
+Create a `.env.local` file in the root directory and add the following keys. *(Reach out to the backend team for the active dev server URL).*
 
-**Use GitHub Codespaces**
+```env
+# API Configuration
+VITE_API_BASE_URL=http://localhost:8000/api
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Clerk Authentication Keys
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key_here
+```
 
-## What technologies are used for this project?
+### 4. Run the development server
+```bash
+npm run dev
+```
+The application will be available at `http://localhost:5173`.
 
-This project is built with:
+---
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 📂 Project Structure
 
-## How can I deploy this project?
+```text
+src/
+├── components/     # Reusable UI components (buttons, dialogs, form inputs)
+├── contexts/       # React Contexts (AuthContext for Clerk integration)
+├── hooks/          # Custom React hooks (useToast, etc.)
+├── integrations/   # API wrappers and external service configurations
+├── pages/          # Main route components (Home, StudentDashboard, CVForm)
+├── types/          # TypeScript interfaces and Zod schemas
+└── assets/         # Static assets and university branding
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+---
 
-## Can I connect a custom domain to my Lovable project?
+## 🤝 Contributors
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Engineered for NED University of Engineering & Technology. 
+* **Frontend Lead:** Saad Sohail 
+* **Backend Lead:** Abdul Wasay and Asher Sajid
