@@ -18,6 +18,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 
+const toDatetimeLocal = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const localTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localTime.toISOString().slice(0, 16);
+};
+
 const toStringArray = (value: unknown, key: string): string[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -144,6 +151,9 @@ const AdminDashboard = () => {
   const [notifyBody, setNotifyBody] = useState('Dear Student,\n\nThis is a reminder to submit your CV as soon as possible.\n\nRegards,\nDIL Admin');
   const [notifyDeadline, setNotifyDeadline] = useState('');
   const [notifySending, setNotifySending] = useState(false);
+  const [deadlineValue, setDeadlineValue] = useState('');
+  const [currentDeadline, setCurrentDeadline] = useState<string | null>(null);
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
 
   //download loading
   const [downloading, setDownloading] = useState(false)
@@ -163,6 +173,10 @@ const AdminDashboard = () => {
       // setRoles(Array.isArray(rls) ? rls : []);
       setPendingAdvisors(Array.isArray(advisors) ? advisors : []);
       setProfiles([]); // No longer available from API
+      const deadline = await backend.getDeadline();
+      const configuredDeadline = deadline.configured ? deadline.deadline : null;
+      setCurrentDeadline(configuredDeadline);
+      setDeadlineValue(configuredDeadline ? toDatetimeLocal(configuredDeadline) : '');
     } catch (error) {
       console.error('Error fetching admin data:', error);
       const message = error instanceof Error ? error.message : 'Failed to load data';
@@ -180,6 +194,35 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const handleSaveDeadline = async () => {
+    if (!deadlineValue) {
+      toast({ title: 'Deadline required', description: 'Choose a date and time for the deadline.', variant: 'destructive' });
+      return;
+    }
+
+    const deadline = new Date(deadlineValue);
+    if (Number.isNaN(deadline.getTime())) {
+      toast({ title: 'Invalid deadline', description: 'Choose a valid date and time.', variant: 'destructive' });
+      return;
+    }
+
+    setDeadlineSaving(true);
+    try {
+      const response = await backend.saveDeadline(deadline.toISOString());
+      setCurrentDeadline(response.deadline);
+      setDeadlineValue(response.deadline ? toDatetimeLocal(response.deadline) : deadlineValue);
+      toast({
+        title: 'Deadline saved',
+        description: `Notified ${response.notified_count ?? 0} students who have not submitted a CV.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save deadline';
+      toast({ title: 'Error saving deadline', description: message, variant: 'destructive' });
+    } finally {
+      setDeadlineSaving(false);
+    }
+  };
 
   const handleFinalApprove = async (id: string) => {
     try {
@@ -350,6 +393,24 @@ const AdminDashboard = () => {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>CV Submission Deadline</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="cv-deadline">Deadline date and time</Label>
+              <Input id="cv-deadline" type="datetime-local" value={deadlineValue} onChange={e => setDeadlineValue(e.target.value)} />
+              {currentDeadline && (
+                <p className="text-xs text-muted-foreground">Current deadline: {new Date(currentDeadline).toLocaleString()}</p>
+              )}
+            </div>
+            <Button onClick={handleSaveDeadline} disabled={deadlineSaving}>
+              {deadlineSaving ? 'Saving...' : 'Save Deadline'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

@@ -44,6 +44,14 @@ export interface ApproveRejectResult {
   message: string;
 }
 
+export interface DeadlineResponse {
+  key: string;
+  deadline: string | null;
+  configured: boolean;
+  notified_count?: number;
+  message?: string;
+}
+
 export const backend = {
   // User endpoints
   syncUserProfile(payload: { department: string; role: "student" | "advisor" }) {
@@ -104,6 +112,14 @@ export const backend = {
     return api.post<{ message: string }>(`/admin/advisors/${advisorId}/reject`, {});
   },
 
+  getDeadline() {
+    return api.get<DeadlineResponse>('/deadline');
+  },
+
+  saveDeadline(deadline: string) {
+    return api.put<DeadlineResponse>('/admin/deadline', { deadline });
+  },
+
   // Deprecated - keeping for backward compatibility
   saveMySubmission(payload: Partial<CVSubmission> & { cv_data: CVData; status: CVStatus }) {
     return api.put<CVSubmission>("/cv-submissions/me", payload);
@@ -139,6 +155,6 @@ export const backend = {
   },
 
   downloadCVs(cvIds: string[]) {
-    return api.post<ArrayBuffer>("/download-cv", { cv_ids: cvIds }, { responseType: 'arraybuffer' });
+    return api.post<ArrayBuffer>("/cv-submissions/download-cv", { cv_ids: cvIds }, { responseType: 'arraybuffer' });
   }
 };

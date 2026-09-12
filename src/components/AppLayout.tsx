@@ -1,11 +1,13 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, FileText, Users, LayoutDashboard, Shield } from 'lucide-react';
+import { LogOut, FileText, Users, LayoutDashboard, Shield, Clock } from 'lucide-react';
+import { formatRemainingTime, useDeadline } from '@/hooks/use-deadline';
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { user, role, signOut } = useAuth();
   const location = useLocation();
+  const { deadline, remainingMs } = useDeadline();
 
   const navItems = [
     { to: '/home', label: 'Home', icon: LayoutDashboard, roles: ['student', 'advisor', 'dil_admin'] },
@@ -52,7 +54,21 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
       </header>
-      <main className="container py-6">{children}</main>
+      <main className="container py-6">
+        {deadline && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span className="font-medium">CV submission deadline</span>
+            </div>
+            <div className="text-sm">
+              <span className="font-mono font-semibold">{formatRemainingTime(remainingMs)}</span>
+              <span className="ml-2 text-amber-800">({new Date(deadline).toLocaleString()})</span>
+            </div>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 };

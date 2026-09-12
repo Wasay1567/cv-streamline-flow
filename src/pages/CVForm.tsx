@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { useDeadline } from '@/hooks/use-deadline';
 import { DEPARTMENTS, BATCHES, cvSchema, emptyCVData } from '@/types/cv';
 import type { CVData, AcademicRecord, Internship, Reference, CVSubmission } from '@/types/cv';
 import { Plus, Trash2, ChevronLeft, ChevronRight, Save, Send } from 'lucide-react';
@@ -163,6 +164,7 @@ const CVForm = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { expired: deadlinePassed } = useDeadline();
   const [step, setStep] = useState(0);
   const [cvData, setCvData] = useState<CVData>(emptyCVData);
   const [existingId, setExistingId] = useState<string | null>(null);
@@ -669,6 +671,11 @@ const CVForm = () => {
 
   const submitCV = async () => {
   if (!user) return;
+
+  if (deadlinePassed) {
+    toast({ title: 'Deadline passed', description: 'The CV submission deadline has passed.', variant: 'destructive' });
+    return;
+  }
   
   if (!cvData.student_image || (!imageFile && !existingId)) {
     toast({ title: 'Error', description: 'Please upload a photo to continue', variant: 'destructive' });
@@ -1282,7 +1289,7 @@ const CVForm = () => {
               ) : (
                 <Button 
                   onClick={submitCV} 
-                  disabled={saving || !isFormValid || !cvData.student_image}
+                  disabled={saving || deadlinePassed || !isFormValid || !cvData.student_image}
                   className="gap-1"
                 >
                   <Send className="h-4 w-4" /> {saving ? 'Submitting...' : 'Submit CV'}
@@ -1299,6 +1306,11 @@ const CVForm = () => {
                   <p>• Missing required fields: {missingFields.map(formatFieldName).join(', ')}</p>
                 )}
               </div>
+            )}
+            {step === STEPS.length - 1 && deadlinePassed && (
+              <p className="text-xs text-destructive font-medium max-w-xs text-right mt-1">
+                The CV submission deadline has passed.
+              </p>
             )}
           </div>
         </div>
